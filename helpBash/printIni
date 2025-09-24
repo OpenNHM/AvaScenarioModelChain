@@ -1,0 +1,17 @@
+pixi run -e dev python - <<'PY'
+from pathlib import Path
+from avaframe.in3Utils import cfgUtils as afCfgUtils, cfgHandling
+from avaframe.com4FlowPy import com4FlowPy
+from com2FlowPy import flowPyAvaFrame
+
+ini = Path(flowPyAvaFrame.__file__).with_name("flowPyAvaFrameCfg.ini")
+print("INI used:", ini)
+cairos_fp_cfg = afCfgUtils.getModuleConfig(flowPyAvaFrame, fileOverride=str(ini))
+com4_fp_cfg   = afCfgUtils.getModuleConfig(com4FlowPy, fileOverride="", modInfo=False, toPrint=False,
+                                           onlyDefault=cairos_fp_cfg["com4FlowPy_com4FlowPy_override"].getboolean("defaultConfig"))
+merged, _     = cfgHandling.applyCfgOverride(com4_fp_cfg, cairos_fp_cfg, com4FlowPy, addModValues=True)
+
+print("\n[PATHS] after merge:")
+for k in ("useCustomPaths","useCustomPathDEM","demPath","outputFiles","outputFileFormat"):
+    print(f"  {k} =", merged["PATHS"].get(k))
+PY
