@@ -24,7 +24,7 @@ Cairos/
 ```
 ## Quick start (Linux)
 ### 1. Prereqs
-- Python >= 3.9,< 3.10
+- python >= 3.9,< 3.10
 - pixi (for env + tasks)
 - git
 
@@ -38,8 +38,9 @@ cd ~/Documents/Applications
 git clone https://github.com/avaframe/AvaFrame.git
 cd AvaFrame
 
-# checkout dev branch until next release
+# checkout branch until next release
 git checkout PS_FP_outputRelInfo
+
 ```
 
 #### Two options from here:
@@ -81,9 +82,20 @@ Cairos/
 ### 4) Setup CAIROS ModelChain env
 
 ```bash
-cd cairosModelChain
-pixi install
-pixi shell
+cd Cairos
+
+# Clean any old envs if something is currupt
+pixi clean
+rm -rf .pixi
+
+# Install dev env (with local AvaFrame)
+pixi install -e dev
+
+# Check that CAIROS uses your local AvaFrame
+pixi shell -e dev
+python -c "import avaframe, pathlib; print(pathlib.Path(avaframe.__file__).resolve())"
+> .../Documents/Applications/AvaFrame/avaframe/__init__.py
+
 ```
 
 ### 5) Configure
@@ -96,7 +108,7 @@ cd Cairos/cairosModelChain
 cp cairosCfg.ini local_cairosCfg.ini
 
 # AvaFrame FlowPy config
-cd AvaFrame/avaframe/com2FlowPy
+cd ../AvaFrame/avaframe/com2FlowPy
 cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
 ```
 
@@ -106,7 +118,7 @@ cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
 ### 6) Run the workflow
 
 ```bash
-pixi run cairos
+pixi run -e dev cairos
 ```
 
 ---

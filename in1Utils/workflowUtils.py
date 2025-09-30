@@ -56,3 +56,24 @@ def demForLeaf(use_big_data: bool, input_dir: pathlib.Path, dem_name: str) -> Op
         p = pathlib.Path(input_dir) / dem_name
         return str(p)
     return None
+
+
+
+
+def discoverAvaDirs(cfg, workFlowDir):
+    """Discover available AvaFrame case leaf directories (SizeN/dry|wet)."""
+    avaDirs = []
+    avaParams = cfg["avaPARAMETER"] if "avaPARAMETER" in cfg else cfg["MAIN"]
+    flowTypes = parseFlowTypes(avaParams.get("flowTypes", "dry"))
+    sizeList  = parseSizeRange(avaParams.get("sizeRange", "2-5"))
+    parentCase = caseFolderName(cfg)
+    rootPath = pathlib.Path(workFlowDir["flowPyRunDir"]) / parentCase
+
+    if rootPath.exists():
+        for case in sorted(p for p in rootPath.iterdir() if p.is_dir()):
+            for N in sizeList:
+                for scen in flowTypes:
+                    cand = case / f"Size{N}" / scen
+                    if cand.is_dir():
+                        avaDirs.append(cand)
+    return avaDirs

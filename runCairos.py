@@ -24,8 +24,6 @@ import com1PRA.praMakeBigDataStructure as praMakeBigDataStructure
 
 # AvaFrame
 from avaframe import runCom4FlowPy
-from avaframe.com4FlowPy import com4FlowPy
-from avaframe.in3Utils import cfgUtils as afCfgUtils
 
 log = logging.getLogger(__name__)
 
@@ -304,7 +302,7 @@ def runCairos(workDir: str = ""):
     # Step 09 - 12: FlowPy Processing (+ optional parameterization)
     # ─────────────────────────────────────────────────────────────────────────
 
-    avaDirs: list[pathlib.Path] = []   
+    avaDirs: list[pathlib.Path] = []
 
     # Step 09: Size dependent parameterization for FlowPy inputs
     log.info("Step 09: Start size dependent parameterization for FlowPy inputs...")
@@ -312,33 +310,8 @@ def runCairos(workDir: str = ""):
         t9 = time.perf_counter()
         t9p = None
 
-        avaParams = cfg["avaPARAMETER"] if "avaPARAMETER" in cfg else cfg["MAIN"]
-        flowTypes = workflowUtils.parseFlowTypes(avaParams.get("flowTypes", "dry"))
-        sizeList  = workflowUtils.parseSizeRange(avaParams.get("sizeRange", "2-5"))
-
-        # Where to look for leaves (always BigData structure now)
-        parentCase = workflowUtils.caseFolderName(cfg)
-        rootPath = pathlib.Path(workFlowDir["flowPyRunDir"]) / parentCase
-        relRoot = os.path.relpath(str(rootPath), start=workFlowDir["cairosDir"])
-        log.info(
-            "Step 09: ...REL → ALPHA/UMAX/EXP for root dir=./%s, flowTypes=%s, sizeRange=%s",
-            relRoot, ",".join(flowTypes), ",".join(map(str, sizeList))
-        )
-
-        if rootPath.exists():
-            for case in sorted(p for p in rootPath.iterdir() if p.is_dir()):
-                for N in sizeList:
-                    sizeDir = case / f"Size{N}"
-                    if not sizeDir.is_dir():
-                        continue
-                    for scen in flowTypes:
-                        cand = sizeDir / scen
-                        if cand.is_dir():
-                            avaDirs.append(cand)
-        else:
-            log.error("...root dir does not exist: ./%s", relRoot)
-            return False
-
+        # Discover leaves
+        avaDirs = workflowUtils.discoverAvaDirs(cfg, workFlowDir)
         if not avaDirs:
             log.error("Step 09: No valid AvaFrame leaves found; cannot continue.")
             return False
@@ -380,7 +353,7 @@ def runCairos(workDir: str = ""):
                     avaDir,
                     cfg["avaPARAMETER"],
                     cfgSize,
-                    demOverride=demPath,   # 👈 override with global DEM
+                    demOverride=demPath,   
                     compressFiles=False,
                 )
             except Exception:
@@ -406,7 +379,11 @@ def runCairos(workDir: str = ""):
 
     if workflowUtils.stepEnabled(workflowFlags, "flowPyRun", masterFlowPy, default=False):
         if not avaDirs:
-            log.error("Step 10: No avaDirs available (Step 09 skipped or found nothing). Cannot run FlowPy.")
+            # rediscover if Step 09 was skipped
+            avaDirs = workflowUtils.discoverAvaDirs(cfg, workFlowDir)
+
+        if not avaDirs:
+            log.error("Step 10: No avaDirs available (nothing discovered). Cannot run FlowPy.")
             return False
 
         doSize     = workflowUtils.stepEnabled(workflowFlags, "flowPyOutputToSize", masterFlowPy, default=False)
@@ -462,6 +439,7 @@ def runCairos(workDir: str = ""):
         log.info("Step 10: ...FlowPy runs skipped (flag is False)")
 
     log.info("Step 10: Finish FlowPy runs in %.2fs", time.perf_counter() - t10)
+
 
 
 if __name__ == "__main__":
