@@ -11,6 +11,8 @@ import rasterio
 import geopandas as gpd
 import numpy as np
 from rasterio.features import rasterize
+from rasterio.errors import RasterioIOError
+import subprocess
 
 import contextlib
 import time
@@ -364,34 +366,77 @@ def deleteTempFolder(folder_path: PathLike) -> int:
 # No Data handling & rasterization helpers
 # ----------------------------------------------------------------------
 
-def enforceNumericNoData(rasterPath: PathLike, fallback: float = -9999.0) -> None:
+def enforceNumericNoData(rasterPath: pathlib.Path, fallback: float = -9999.0, force_epsg: int = 25832) -> None:
     """
-    Ensure the raster has a valid numeric nodata value (float32).
-    If nodata is None or NaN, overwrite file with fallback.
+    Ensure raster has:
+      - valid numeric NoData value (not None, NaN, or 0)
+      - CRS normalized to given EPSG (default 25832)
+
+    Only rewrites metadata/content if something is wrong.
     """
     rasterPath = pathlib.Path(rasterPath)
     if not rasterPath.exists():
         raise FileNotFoundError(rasterPath)
 
-    with rasterio.open(rasterPath, "r+") as src:
-        prof = src.profile
-        nodata = prof.get("nodata")
+    try:
+        with rasterio.open(rasterPath, "r+") as src:
+            prof = src.profile.copy()
+            nodata = prof.get("nodata")
+            crs_epsg = src.crs.to_epsg() if src.crs else None
 
+        changed = False
+
+        # --- NODATA check ---
         if nodata is None or (isinstance(nodata, float) and np.isnan(nodata)):
-            log.warning("Raster %s has invalid nodata (%s). Resetting to %s.",
-                        rasterPath, nodata, fallback)
+            log.warning("Raster %s: nodata missing/NaN. Resetting to %s.", rasterPath, fallback)
+            _rewriteWithNodata(rasterPath, fallback)
+            changed = True
 
-            arr = src.read(1)
-            arr = np.where(np.isnan(arr), fallback, arr)
+        elif nodata == 0:
+            log.warning("Raster %s: nodata was 0 (invalid). Resetting to %s.", rasterPath, fallback)
+            _rewriteWithNodata(rasterPath, fallback)
+            changed = True
 
-            prof.update(nodata=fallback, dtype="float32")
-
-            with rasterio.open(rasterPath, "w", **prof) as dst:
-                dst.write(arr, 1)
-
-            log.info("Overwritten %s with enforced nodata=%s", rasterPath, fallback)
         else:
-            log.info("Raster %s already has valid nodata=%s", rasterPath, nodata)
+            log.debug("Raster %s: nodata already valid (%s).", rasterPath, nodata)
+
+        # --- CRS check ---
+        if force_epsg and crs_epsg != force_epsg:
+            log.warning("Raster %s: CRS %s ≠ EPSG:%s. Normalizing...",
+                        rasterPath, crs_epsg, force_epsg)
+            try:
+                subprocess.run(
+                    ["gdal_edit.py", "-a_srs", f"EPSG:{force_epsg}", str(rasterPath)],
+                    check=False
+                )
+                changed = True
+            except Exception as e:
+                log.error("Failed to normalize CRS for %s: %s", rasterPath, e)
+        else:
+            log.debug("Raster %s: CRS already EPSG:%s", rasterPath, force_epsg)
+
+        if changed:
+            log.info("Raster %s normalized (nodata/CRS fixed).", rasterPath)
+        else:
+            log.info("Raster %s already valid (nodata + CRS).", rasterPath)
+
+    except RasterioIOError as e:
+        log.error("Could not open raster: %s", e)
+        raise
+
+
+def _rewriteWithNodata(rasterPath: pathlib.Path, fallback: float) -> None:
+    """Internal helper: rewrite raster with enforced nodata value."""
+    with rasterio.open(rasterPath) as src:
+        arr = src.read(1)
+        prof = src.profile.copy()
+
+    arr = np.where(np.isnan(arr), fallback, arr).astype("float32")
+    prof.update(nodata=fallback, dtype="float32")
+
+    with rasterio.open(rasterPath, "w", **prof) as dst:
+        dst.write(arr, 1)
+    log.info("Rewritten %s with enforced nodata=%s", rasterPath, fallback)
 
 
 def readBoundaryInDemCrs(boundPath: PathLike, demCrs):

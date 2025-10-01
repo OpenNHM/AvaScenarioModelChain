@@ -71,6 +71,7 @@ def initWorkDir(config_or_path: Union[str, pathlib.Path, configparser.ConfigPars
         ("flowPyOutput",           "10_flowPyOutput"),
         ("avaDirectory",           "11_avaDirectory"),
         ("avaScenMaps",            "12_avaScenMaps"),
+        ("avaScenPreview",         "13_avaScenPreview"),
         ("plots",                  "91_plots"),
         ("gis",                    "92_GIS"),
     ]

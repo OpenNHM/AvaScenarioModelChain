@@ -156,18 +156,19 @@ def runCairos(workDir: str = ""):
         log.error("\n\n          ... Please provide the required input files and run again ...\n")
         return False
 
-    # --- Extra: enforce numeric nodata for raster inputs ---
+    # --- Extra: enforce numeric nodata & CRS normalization for raster inputs ---
     for label, fname in (("DEM", demName), ("FOREST", forestName)):
-        if fname:
-            fpath = inputDir / fname
-            try:
-                dataUtils.enforceNumericNoData(fpath, fallback=-9999.0)
-                log.info("Input %s normalized: nodata value to -9999 converted", label)
-            except Exception:
-                log.exception("Failed to enforce nodata for %s: %s", label, fpath)
-                return False
+        if not fname:
+            continue
+        fpath = inputDir / fname
+        try:
+            dataUtils.enforceNumericNoData(fpath, fallback=-9999.0, force_epsg=25832)
+            log.info("Input %s validated: nodata + CRS check done", label)
+        except Exception:
+            log.exception("Failed to normalize %s: %s", label, fpath)
+            return False
 
-    log.info("All raster inputs normalized: DEM + FOREST nodata values checked and safe.")
+    log.info("All raster inputs validated: DEM + FOREST nodata/CRS checked and safe.")
 
     # Master flag: run all PRA steps if True
     masterPra = workflowFlags.getboolean("runAllPRASteps", fallback=False)
@@ -373,7 +374,6 @@ def runCairos(workDir: str = ""):
     # ─────────────────────────────────────────────────────────────────────────
     # Step 10: Run FlowPy (per enumerated leaf, with size + cleanup)
     # ─────────────────────────────────────────────────────────────────────────
-
     log.info("Step 10: Start FlowPy runs...")
     t10 = time.perf_counter()
 
@@ -397,13 +397,14 @@ def runCairos(workDir: str = ""):
             t_leaf = time.perf_counter()
 
             try:
-                # Direct call to AvaFrame runner for this leaf
                 runCom4FlowPy.main(avalancheDir=str(avaDir))
 
-                log.info("Step 10: ...Finish FlowPy run for ./{} in {:.2f}s".format(
-                    relLeaf, time.perf_counter() - t_leaf))
+                log.info(
+                    "Step 10: ...Finish FlowPy run for ./%s in %.2fs",
+                    relLeaf, time.perf_counter() - t_leaf
+                )
 
-                # --- Step 11: Output → Size (per-leaf) ---
+                # --- Optional Step 11: Output → Size ---
                 if doSize:
                     try:
                         log.info("Step 11 [for leaf]: Start results → size")
@@ -413,7 +414,7 @@ def runCairos(workDir: str = ""):
                         log.exception("Step 11 [for leaf]: Results → size failed for leaf: %s", relLeaf)
                         return False
 
-                # --- Step 12: Compress & clean (per-leaf) ---
+                # --- Optional Step 12: Compress & clean ---
                 if doCompress:
                     try:
                         outDir = pathlib.Path(avaDir) / "Outputs"
@@ -434,24 +435,36 @@ def runCairos(workDir: str = ""):
             except Exception:
                 log.exception("Step 10: FlowPy failed for leaf: %s", relLeaf)
                 return False
-
     else:
         log.info("Step 10: ...FlowPy runs skipped (flag is False)")
 
     log.info("Step 10: Finish FlowPy runs in %.2fs", time.perf_counter() - t10)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Step 13: Prep avaDirectoryType (GEOJSON Data BASE only res rel outlines + attributes)
+    # ─────────────────────────────────────────────────────────────────────────
+
+com2AvaDirectory/avaDirectoryType.py
+
+new stuff!!!!
+
+
+
 
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.WARNING,   # default: only warnings/errors show
         format="%(levelname)s:%(name)s: %(message)s"
     )
 
+    # Explicitly allow INFO logs from CAIROS main + key drivers
     logging.getLogger("__main__").setLevel(logging.INFO)
     logging.getLogger("runInitWorkDir").setLevel(logging.INFO)
     logging.getLogger("in2Parameter").setLevel(logging.INFO)
     logging.getLogger("in2Parameter.compParams").setLevel(logging.INFO)
+
+    # Keep details from AvaFrame + helpers quiet unless WARN/ERROR
     logging.getLogger("in2Parameter.sizeParameters").setLevel(logging.WARNING)
     logging.getLogger("avaframe.com4FlowPy.splitAndMerge").setLevel(logging.WARNING)
     logging.getLogger("in1Utils.cfgUtils").setLevel(logging.WARNING)

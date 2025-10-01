@@ -23,10 +23,26 @@ Cairos/
 └── cairosModelChain/    # Full model chain (main workflow)
 ```
 ## Quick start (Linux)
-### 1. Prereqs
-- python >= 3.9,< 3.10
-- pixi (for env + tasks)
-- git
+
+#### 1. Minimal system prerequisites
+* Install only the flexible, OS-level tools system-wide.
+* All project dependencies (AvaFrame, CAIROS, GDAL, NumPy, etc.) will live inside Pixi-managed environments.
+* System Python (python3.10 or 3.11 on Ubuntu) is kept minimal — used only for tools like VS Code, Pixi bootstrap, etc.
+* CAIROS and AvaFrame never touch system Python → they live in isolated .pixi/envs/* environments.
+* Optional:
+  * Install VS Code for editing, debugging, and integrated terminals:
+https://code.visualstudio.com/download
+
+```bash
+# System-wide basics
+sudo apt update
+sudo apt install -y git python3 python3-pip
+
+# Install Pixi (recommended via installer script)
+curl -fsSL https://pixi.sh/install.sh | bash
+# restart your shell so `pixi` is in PATH
+```
+
 
 ### 2) Install AvaFrame (temporary: dev branch)
 
@@ -38,9 +54,8 @@ cd ~/Documents/Applications
 git clone https://github.com/avaframe/AvaFrame.git
 cd AvaFrame
 
-# checkout branch until next release
+# checkout branch until next release (ATM)
 git checkout PS_FP_outputRelInfo
-
 ```
 
 #### Two options from here:
@@ -53,8 +68,13 @@ Option B: Use AvaFrame standalone
   - If you want to run AvaFrame directly (outside CAIROS), you need to compile the Cython parts:
 
 ```bash
+# set the avalanche dir in local_avaFrameCfg.py and apply your settungs to local_com4FlowPyCfg.ini
+cd AvaFrame
 pixi shell
 python setup.py build_ext --inplace
+pixi shell --environment dev
+cd AvaFrame/avaframe
+python runCom4FlowPy.py
 ```
   - Repeat this step whenever Cython code changes or after pulling new updates.
 
@@ -84,8 +104,10 @@ Cairos/
 ```bash
 cd Cairos
 
-# Clean any old envs if something is currupt
-pixi clean
+# Clean any old envs if something is corrupted
+rm -f pixi.lock
+pixi clean -e dev || true
+pixi clean cache || true
 rm -rf .pixi
 
 # Install dev env (with local AvaFrame)
@@ -95,6 +117,7 @@ pixi install -e dev
 pixi shell -e dev
 python -c "import avaframe, pathlib; print(pathlib.Path(avaframe.__file__).resolve())"
 > .../Documents/Applications/AvaFrame/avaframe/__init__.py
+
 
 ```
 
