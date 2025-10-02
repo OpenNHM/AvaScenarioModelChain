@@ -444,11 +444,6 @@ def runCairos(workDir: str = ""):
     # Step 13: Prep avaDirectoryType (GEOJSON Data BASE only res rel outlines + attributes)
     # ─────────────────────────────────────────────────────────────────────────
 
-com2AvaDirectory/avaDirectoryType.py
-
-new stuff!!!!
-
-
 
 
 
