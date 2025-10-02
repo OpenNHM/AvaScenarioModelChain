@@ -7,6 +7,9 @@ helpers for runCairos.py
 from __future__ import annotations
 from typing import Optional, Iterable
 import pathlib
+import logging
+log = logging.getLogger(__name__)
+import os   
 
 
 # ----------------------------------------------------------------------
@@ -59,7 +62,7 @@ def demForLeaf(use_big_data: bool, input_dir: pathlib.Path, dem_name: str) -> Op
 
 
 
-
+'''old runner
 def discoverAvaDirs(cfg, workFlowDir):
     """Discover available AvaFrame case leaf directories (SizeN/dry|wet)."""
     avaDirs = []
@@ -76,4 +79,58 @@ def discoverAvaDirs(cfg, workFlowDir):
                     cand = case / f"Size{N}" / scen
                     if cand.is_dir():
                         avaDirs.append(cand)
+    return avaDirs
+
+'''
+
+def discoverAvaDirs(cfg, workFlowDir):
+    """
+    Discover available AvaFrame case leaf directories (SizeN/dry|wet),
+    respecting [avaPARAMETER] (flowTypes, sizeRange) and
+    [praMAKEBIGDATASTRUCTURE] (per-flow-type min/max).
+    """
+    avaDirs = []
+
+    # Read flowTypes + sizeRange from [avaPARAMETER]
+    avaParams = cfg["avaPARAMETER"] if "avaPARAMETER" in cfg else cfg["MAIN"]
+    flowTypes = parseFlowTypes(avaParams.get("flowTypes", "dry"))   # e.g. ["dry","wet"]
+    sizeList  = parseSizeRange(avaParams.get("sizeRange", "2-5"))   # e.g. [2,3,4,5]
+
+    # Optional tighter caps from [praMAKEBIGDATASTRUCTURE]
+    sect = cfg["praMAKEBIGDATASTRUCTURE"] if "praMAKEBIGDATASTRUCTURE" in cfg else {}
+    minDry = int(sect.get("minDrySizeClass", 2))
+    maxDry = int(sect.get("maxDrySizeClass", 5))
+    minWet = int(sect.get("minWetSizeClass", 2))
+    maxWet = int(sect.get("maxWetSizeClass", 5))
+
+    parentCase = caseFolderName(cfg)
+    rootPath = pathlib.Path(workFlowDir["flowPyRunDir"]) / parentCase
+
+    if rootPath.exists():
+        for case in sorted(p for p in rootPath.iterdir() if p.is_dir()):
+            for N in sizeList:
+                for scen in flowTypes:
+                    scen_lower = scen.lower()
+
+                    # enforce per-flow-type min/max
+                    if scen_lower == "dry" and not (minDry <= N <= maxDry):
+                        continue
+                    if scen_lower == "wet" and not (minWet <= N <= maxWet):
+                        continue
+
+                    cand = case / f"Size{N}" / scen_lower
+                    if cand.is_dir():
+                        avaDirs.append(cand)
+                        log.info(
+                            "Discovered leaf: ./%s (size=%d, scen=%s)",
+                            os.path.relpath(str(cand), start=workFlowDir["cairosDir"]),
+                            N, scen_lower
+                        )
+
+    if not avaDirs:
+        log.warning(
+            "discoverAvaDirs: No valid leaves found for flowTypes=%s, sizeRange=%s",
+            flowTypes, sizeList
+        )
+
     return avaDirs

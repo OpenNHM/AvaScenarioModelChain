@@ -205,27 +205,28 @@ def sizeToUmax(size, dem, cfgSize):
 
 
 def sizeToExp(size, dem, cfgSize):
-    '''
-    calculate FlowPy input parameter exponent dependend on avalanche size
-    
-    Parameters:
-    -----------
-    size: numpy array or float
-        avalanche size of PRA cell
-    dem: numpy array
-        DEM, elevation
-    cfgSize: congig Parser
-        contains parameters for size parameterisation
-        
-    Returns:
-    -----------
-    exp: numpy array or float
-        exponent of PRA
-    '''
-    sizeTemp = sizeForParameterisation(size, dem, cfgSize, cfgSize.getfloat('sizeShiftExp'))
+    """
+    EXP parameter.
+    If constantExp=True -> constant raster: base (dry) or base+shifted (wet, via sizeForParameterisation).
+    Otherwise use size-dependent formula.
+    """
+    if cfgSize.getboolean("constantExp", fallback=False):
+        base = cfgSize.getfloat("constantExpValue", fallback=12.0)
 
-    exp = 75 * (0.64)**sizeTemp
-    return exp
+        if cfgSize.getboolean("alphaDependendTemperature", fallback=False):
+            # Use same shifting logic as alpha/umax
+            sizeTemp = sizeForParameterisation(size, dem, cfgSize, cfgSize.getfloat("sizeShiftExp", fallback=0.0))
+            delta = np.nanmean(sizeTemp - size)
+            log.info(f"The average of the change in size in the EXP parameterisation is: {delta}")
+            
+            return np.full_like(size, base + (delta if delta is not None else 0), dtype=np.float32)
+        else:
+            return np.full_like(size, base, dtype=np.float32)
+
+    # ---- legacy size-dependent behaviour ----
+    sizeTemp = sizeForParameterisation(size, dem, cfgSize, cfgSize.getfloat("sizeShiftExp", fallback=0.0))
+    exp = 75 * (0.64) ** sizeTemp
+    return exp.astype(np.float32, copy=False)
 
 
 def sizeForParameterisation(sizeRef, dem, cfgSize, wetSizeShift):

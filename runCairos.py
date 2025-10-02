@@ -331,7 +331,11 @@ def runCairos(workDir: str = ""):
         for avaDir in avaDirs:
             relLeaf = os.path.relpath(str(avaDir), start=workFlowDir["cairosDir"])
             scen = avaDir.name.lower()
-            cfgSize = cfg["avaSIZE"]
+
+            # --- Make a fresh ConfigParser with a copy of avaSIZE ---
+            cfgSize = configparser.ConfigParser()
+            cfgSize["avaSIZE"] = dict(cfg["avaSIZE"])
+            cfgSize = cfgSize["avaSIZE"]  # SectionProxy with .get(), .getfloat(), etc.
 
             size_parent = avaDir.parent.name.lower()
             if size_parent.startswith("size"):

@@ -113,6 +113,7 @@ def _logDirectoryTree(baseDir, cairosDir, level=logging.INFO):
 def runPraMakeBigDataStructure(cfg, workFlowDir):
     """
     Step 08: Build FlowPy input folder structure and copy PRA rasters and GeoJSONs.
+    Supports separate min/max size caps for dry and wet avalanches.
     """
     tAll = time.perf_counter()
 
@@ -124,7 +125,10 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
 
     sect = cfg["praMAKEBIGDATASTRUCTURE"]
     usePraBoundary   = sect.getboolean("usePraBoundary", fallback=False)
-    minSizeClass     = sect.getint("minSizeClass", fallback=2)
+    minDrySizeClass  = sect.getint("minDrySizeClass", fallback=2)
+    maxDrySizeClass  = sect.getint("maxDrySizeClass", fallback=5)
+    minWetSizeClass  = sect.getint("minWetSizeClass", fallback=2)
+    maxWetSizeClass  = sect.getint("maxWetSizeClass", fallback=4)
     logDirectoryTree = sect.getboolean("logDirectoryTree", fallback=False)
 
     # --- Directories ---
@@ -188,21 +192,34 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                     log.warning("Could not extract size number from '%s'; skipping.", fileStem)
                     continue
 
-                sizeMax = max(minSizeClass, int(sizeNum))
-                caseRoot = _makeCaseTreeForRaster(
-                    outCaseDir, folderBase, maxSize=sizeMax, minSize=minSizeClass
-                )
-                nFoldersCreated += (sizeMax - minSizeClass + 1) * 2
+                # ensure case root
+                caseRoot = os.path.join(outCaseDir, folderBase)
+                os.makedirs(caseRoot, exist_ok=True)
 
-                for size in range(minSizeClass, sizeMax + 1):
-                    for flowType in ("wet", "dry"):
-                        # Decide destination: REL (attribute) vs RELID (ID)
+                for flowType in ("dry", "wet"):
+                    if flowType == "dry":
+                        minSize = minDrySizeClass
+                        maxSize = min(maxDrySizeClass, sizeNum)
+                    else:  # wet
+                        minSize = minWetSizeClass
+                        maxSize = min(maxWetSizeClass, sizeNum)
+
+                    for size in range(minSize, maxSize + 1):
+                        # Create REL/RELID/RELJSON dirs
+                        relDir     = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "REL")
+                        relIdDir   = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELID")
+                        relJsonDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELJSON")
+                        os.makedirs(relDir, exist_ok=True)
+                        os.makedirs(relIdDir, exist_ok=True)
+                        os.makedirs(relJsonDir, exist_ok=True)
+                        nFoldersCreated += 1
+
+                        # Copy PRA raster
                         if fileStem.endswith("-praID") or "-praID" in fileStem:
-                            relDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELID")
+                            dstPath = os.path.join(relIdDir, os.path.basename(tifPath))
                         else:
-                            relDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "REL")
+                            dstPath = os.path.join(relDir, os.path.basename(tifPath))
 
-                        dstPath = os.path.join(relDir, os.path.basename(tifPath))
                         try:
                             shutil.copy2(tifPath, dstPath)
                             nCopied += 1
@@ -211,13 +228,10 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                         except Exception:
                             log.exception("Copy failed to ./%s", relPath(relDir, cairosDir))
 
-                        # locate corresponding final GeoJSON (*.geojson in Step 08 folder)
+                        # Copy matching GeoJSON (if exists)
                         geoBase = folderBase + ".geojson"
                         geojsonSearch = os.path.join(inputFolder, geoBase)
-
                         if os.path.exists(geojsonSearch):
-                            relJsonDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELJSON")
-                            os.makedirs(relJsonDir, exist_ok=True)
                             dstJson = os.path.join(relJsonDir, os.path.basename(geojsonSearch))
                             try:
                                 shutil.copy2(geojsonSearch, dstJson)
