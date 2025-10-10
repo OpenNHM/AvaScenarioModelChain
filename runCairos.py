@@ -401,7 +401,30 @@ def runCairos(workDir: str = ""):
             t_leaf = time.perf_counter()
 
             try:
+                # --- Backup handlers ---
+                root_logger = logging.getLogger()
+                handlers_backup = list(root_logger.handlers)
+
+                # --- Attach extra file handler so FlowPy logs also go to CAIROS logfile ---
+                file_handlers = [h for h in handlers_backup if isinstance(h, logging.FileHandler)]
+                flowpy_handler = None
+                if file_handlers:
+                    fh = file_handlers[0]
+                    flowpy_handler = logging.FileHandler(fh.baseFilename, mode="a", encoding="utf-8")
+                    flowpy_handler.setLevel(logging.INFO)
+                    flowpy_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+                    root_logger.addHandler(flowpy_handler)
+
+                # --- Run FlowPy (its logs will appear in console + logfile) ---
                 runCom4FlowPy.main(avalancheDir=str(avaDir))
+
+                # --- Remove temp FlowPy handler ---
+                if flowpy_handler:
+                    root_logger.removeHandler(flowpy_handler)
+                    flowpy_handler.close()
+
+                # --- Restore original handlers ---
+                root_logger.handlers = handlers_backup
 
                 log.info(
                     "Step 10: ...Finish FlowPy run for ./%s in %.2fs",
