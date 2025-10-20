@@ -53,9 +53,6 @@ cd ~/Documents/Applications
 # clone AvaFrame
 git clone https://github.com/avaframe/AvaFrame.git
 cd AvaFrame
-
-# checkout branch until next release (ATM)
-git checkout PS_FP_outputRelInfo
 ```
 
 #### Two options from here:
@@ -72,6 +69,8 @@ Option B: Use AvaFrame standalone
 cd AvaFrame
 pixi shell
 python setup.py build_ext --inplace
+# checkout branch until next release (ATM)
+git checkout PS_FP_outputRelInfo
 pixi shell --environment dev
 cd AvaFrame/avaframe
 python runCom4FlowPy.py
@@ -88,7 +87,7 @@ python runCom4FlowPy.py
 ```bash
 # choose your workspace directory next to AvaFrame
 cd ~/Documents/Applications
-git clone <your-cairos-repo> Cairos
+git clone <your-cairos-repo> Cairos    # !!!!!!
 cd Cairos
 ```
 
