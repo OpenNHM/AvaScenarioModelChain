@@ -213,6 +213,15 @@ def runCairos(workDir: str = ""):
             if not (praDir / "pra.tif").exists() or not (praDir / "aspect.tif").exists():
                 log.error("Step 02 requires pra.tif and aspect.tif in 01_praDelineation; missing inputs.")
             else:
+                maskComm = False
+                if "praSELECTION" in cfg:
+                    selCfg = cfg["praSELECTION"]
+                    maskComm = selCfg.getboolean("maskCommRegion", fallback=False)
+                
+                if maskComm:
+                    commFile = cfg["MAIN"].get("COMMISSIONREGION", "").strip()
+                    log.info("Step 02: maskCommRegion=True → using COMMISSIONREGION=%s", commFile or "<missing>")
+                
                 praSelection.runPraSelection(cfg, workFlowDir)
                 log.info("Step 02: Finish PRA selection in %.2fs", time.perf_counter() - t2)
         except Exception:
@@ -220,6 +229,7 @@ def runCairos(workDir: str = ""):
             return False
     else:
         log.info("Step 02: ...PRA selection skipped (flag is False)")
+
 
     # Step 03: Subcatchments
     log.info("Step 03: Start subcatchments...")
