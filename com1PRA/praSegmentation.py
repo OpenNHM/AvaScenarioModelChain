@@ -1,72 +1,83 @@
-# praSegmentation.py
+# ------------------ Step 05: PRA Segmentation ------------------ #
+# Purpose: Intersect cleaned PRA polygons with smoothed subcatchments.
+# Inputs:  PRA polygons from Step 04 (GeoJSONs), subcatchments (Step 03 SHP)
+# Outputs: Segmented PRA GeoJSONs + filtered GeoJSONs by size
+# Config:  [praSEGMENTATION]
+# Consumes: Cleaned PRA polygons + subcatchment shapefiles
+# Provides: Segmented PRA polygons for later steps
 
 import os
 import glob
 import time
 import logging
 import contextlib
-
-import geopandas as geopandas
-import pandas as pandas
-import numpy as numpy
+import geopandas as gpd
+import numpy as np
+import pandas as pd
 
 import in1Utils.dataUtils as dataUtils
+from in1Utils.dataUtils import timeIt, relPath
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.ERROR)
 logging.getLogger("fiona").setLevel(logging.ERROR)
 
+# ------------------ Helper functions ------------------ #
 
-# ------------------ Minimal helpers ------------------ #
-
-def relPath(path, cairosDir):
-    try:
-        return os.path.relpath(path, start=cairosDir)
-    except Exception:
-        return path
-
-@contextlib.contextmanager
-def timeIt(label, level=logging.DEBUG):
-    t0 = time.perf_counter()
-    try:
-        yield
-    finally:
-        log.log(level, "%s finished in %.2fs", label, time.perf_counter() - t0)
-
-def findPraFiles(praProcessingDir, code3):
-    """
-    Find polygonized PRA layers produced in step 05 using the threshold code.
-    Example filenames: pra030secE_BnCh2.shp, pra030secN_BnCh2.shp, ...
-    """
-    pattern = f"pra{code3}sec*_BnCh2.shp"
+def findPraFiles(praProcessingDir: str, code3: str):
+    """Find polygonized PRA GeoJSONs from Step 04 (code like '030')."""
+    pattern = f"pra{code3}sec*_BnCh2.geojson"
     return sorted(glob.glob(os.path.join(praProcessingDir, pattern)))
 
-def buildSubcatchSmoothedPath(praSubcatchmentsDir, streamThreshold, minLength, smoothingWindowSize, weightedSlopeFlow):
-    """
-    Construct the exact smoothed subcatchments file name:
-    subcatchments_smoothed_{streamThreshold}_{minLength}_{smoothingWindowSize}_{weighted|unweighted}.shp
-    """
+
+def buildSubcatchSmoothedPath(praSubcatchmentsDir: str,
+                              streamThreshold: int,
+                              minLength: int,
+                              smoothingWindowSize: int,
+                              weightedSlopeFlow: bool):
+    """Return expected smoothed subcatchments path (SHP from Step 03)."""
     weight_tag = "weighted" if weightedSlopeFlow else "unweighted"
     fname = f"subcatchments_smoothed_{streamThreshold}_{minLength}_{smoothingWindowSize}_{weight_tag}.shp"
     return os.path.join(praSubcatchmentsDir, fname)
 
-def _parseRangeCsv(value):
+
+def ensureGeojsonVersion(src_path: str) -> str:
+    """
+    Convert SHP → GeoJSON if not already GeoJSON.
+    Returns path to the GeoJSON file.
+    """
+    if src_path.lower().endswith(".geojson"):
+        return src_path
+    geojson_path = os.path.splitext(src_path)[0] + ".geojson"
+    try:
+        gdf = gpd.read_file(src_path)
+        gdf.to_file(geojson_path, driver="GeoJSON")
+        log.info("Converted subcatchments shapefile to GeoJSON: ./%s", relPath(geojson_path, os.getcwd()))
+        return geojson_path
+    except Exception:
+        log.exception("Failed to convert shapefile → GeoJSON: %s", src_path)
+        raise
+
+
+def _parseRangeCsv(value: str):
     v = (value or "").strip()
     parts = [p.strip() for p in v.split(",")]
     if len(parts) != 2:
-        raise ValueError(f"Invalid size class definition: '{value}' (expected 'low,high')")
+        raise ValueError(f"Invalid size class: '{value}' (expected 'low,high')")
     lo = float(parts[0])
-    hi = float('inf') if parts[1].lower() == "inf" else float(parts[1])
+    hi = float("inf") if parts[1].lower() == "inf" else float(parts[1])
     return lo, hi
+
 
 def loadSizeClasses(cfg):
     sect = cfg["praSEGMENTATION"]
     sizeClasses = {}
     for i in range(1, 6):
         key = f"sizeClass{i}"
-        lo, hi = _parseRangeCsv(sect.get(key, fallback=None))
+        lo, hi = _parseRangeCsv(sect.get(key, fallback="0,inf"))
         sizeClasses[i] = (lo, hi)
     return sizeClasses
+
 
 def classifyAreasSqm(areasSqm, sizeClasses):
     counts = {k: 0 for k in sizeClasses}
@@ -77,17 +88,14 @@ def classifyAreasSqm(areasSqm, sizeClasses):
                 break
     return counts
 
-def attachAreasMetersNoGeomChange(gdf, demCrs):
-    """
-    Compute areas in meters using a temporary projected CRS (prefer DEM CRS if projected),
-    but KEEP the geometry CRS unchanged.
-    """
+
+def attachAreasMetersNoGeomChange(gdf: gpd.GeoDataFrame, demCrs) -> gpd.GeoDataFrame:
+    """Compute areas (m², km²) without changing CRS."""
     try:
         if len(gdf) == 0:
             return gdf.assign(area_m=[], area_km=[])
-        # DEM projected? use it. Else estimate UTM; else fall back to native units.
         isProjected = getattr(demCrs, "is_projected", None)
-        if isProjected is True:
+        if isProjected:
             area_series = gdf.to_crs(demCrs).geometry.area
         else:
             try:
@@ -95,250 +103,163 @@ def attachAreasMetersNoGeomChange(gdf, demCrs):
                 area_series = gdf.to_crs(utm).geometry.area
             except Exception:
                 area_series = gdf.geometry.area
-        return gdf.assign(area_m=area_series.values, area_km=(area_series.values / 1e6))
+        return gdf.assign(area_m=area_series.values, area_km=area_series.values / 1e6)  # type: ignore
     except Exception:
-        log.exception("Area computation failed; writing zeros (geometry unchanged).")
-        z = numpy.zeros(len(gdf))
+        log.exception("Area computation failed; writing zeros.")
+        z = np.zeros(len(gdf))
         return gdf.assign(area_m=z, area_km=z / 1e6)
-    
 
-def applySizeFilter(inputShpPath, sizeFilter, outBasePath, cairosDir, sizeClasses):
-    """
-    Keep only features with area_m >= sizeFilter. Writes:
-      - {outBasePath}.shp   (only if kept > 0 to avoid empty SHP issues)
-      - {outBasePath}.geojson
-    Returns: kept, removed, outShp_or_None, outGeo, filteredClasses
-    """
-    gdf = geopandas.read_file(inputShpPath)
 
-    # Ensure area_m exists; fallback to native units if missing (shouldn't happen)
+def applySizeFilter(inputGeoPath, sizeFilter, outBasePath, cairosDir, sizeClasses):
+    """Keep only features ≥ sizeFilter (m²). Output GeoJSON."""
+    gdf = gpd.read_file(inputGeoPath)
     if "area_m" not in gdf.columns:
-        gdf = gdf.assign(area_m=gdf.geometry.area)
+        gdf["area_m"] = gdf.geometry.area
+    gdfFiltered = gdf[gdf["area_m"] >= float(sizeFilter)]
 
-    # Keep only what's needed to avoid attribute collisions
-    gdf = gdf[["geometry", "area_m"]]
-
-    before = len(gdf)
-    sizeFilter = float(sizeFilter)
-    gdfFiltered = gdf[gdf["area_m"] >= sizeFilter]
-    kept, removed = len(gdfFiltered), before - len(gdfFiltered)
-
-    outShp = f"{outBasePath}.shp"
     outGeo = f"{outBasePath}.geojson"
-
-    # Save (SHP only if non-empty to avoid driver errors; GeoJSON is fine empty)
-    outShpWritten = None
-    if kept > 0:
-        gdfFiltered.to_file(outShp)
-        outShpWritten = outShp
-    else:
-        log.debug("Size filter produced 0 features for ./%s; skipping shapefile write.", relPath(inputShpPath, cairosDir))
-
     gdfFiltered.to_file(outGeo, driver="GeoJSON")
-
-    # Class stats for filtered set
     filteredClasses = classifyAreasSqm(gdfFiltered["area_m"].astype(float).tolist(), sizeClasses)
 
-    log.info("...apply size filter = %.0f m² → kept=%d, removed=%d → out=./%s",
-             sizeFilter, kept, removed,
-             relPath(outShp if outShpWritten else outGeo, cairosDir))
-
-    return kept, removed, outShpWritten, outGeo, filteredClasses
-
-
- 
+    log.info("...size filter %.0f m² → kept=%d, out=./%s",
+             sizeFilter, len(gdfFiltered), relPath(outGeo, cairosDir))
+    return len(gdfFiltered), outGeo, filteredClasses
 
 
 # ------------------ Core per-file operation ------------------ #
 
-def processSinglePraLayer(inPath, subcatchGdf, outDir,
-                          streamThreshold, minLength, smoothingWindowSize,
-                          cairosDir, sizeClasses, demCrs):
-    """
-    Simple: overlay in PRA CRS, explode, keep geometry, attach area attrs without changing geometry CRS.
-    """
+def processSinglePraLayer(inPath: str, subcatchGdf: gpd.GeoDataFrame, outDir: str,
+                          streamThreshold: int, minLength: int, smoothingWindowSize: int,
+                          cairosDir: str, sizeClasses, demCrs):
+    """Overlay PRA × subcatchments; compute areas and save GeoJSON."""
     try:
         with timeIt(f"processSinglePraLayer({os.path.basename(inPath)})"):
-            praGdf = geopandas.read_file(inPath)
+            praGdf = gpd.read_file(inPath)
 
-            # Overlay in PRA CRS (no prefilter, no snapping, no precision grid)
-            praUse  = praGdf
-            subcUse = subcatchGdf.to_crs(praUse.crs) if (subcatchGdf.crs != praUse.crs) else subcatchGdf
-            clipped = geopandas.overlay(praUse, subcUse, how='intersection', keep_geom_type=True)
+            subcUse = subcatchGdf.to_crs(praGdf.crs) if subcatchGdf.crs != praGdf.crs else subcatchGdf
+            clipped = gpd.overlay(praGdf, subcUse, how="intersection", keep_geom_type=True)
 
-            if len(clipped) == 0:
+            if clipped.empty:
                 log.debug("No intersection for ./%s", relPath(inPath, cairosDir))
                 return None, 0, 0.0, {k: 0 for k in sizeClasses}
 
             clipped = clipped.explode(index_parts=True).reset_index(drop=True)
-            clipped = clipped[['geometry']]
-
-            # Compute areas (m²/km²) without changing geometry CRS
+            clipped = clipped[["geometry"]]
             clipped = attachAreasMetersNoGeomChange(clipped, demCrs)
-
-            # Class stats
             classCounts = classifyAreasSqm(clipped["area_m"].astype(float).tolist(), sizeClasses)
 
-            # Output
             base = os.path.splitext(os.path.basename(inPath))[0]
-            outPath = os.path.join(outDir, f"{base}_subC{streamThreshold}_{minLength}_{smoothingWindowSize}.shp")
-            clipped.to_file(outPath)
+            outPath = os.path.join(outDir, f"{base}_subC{streamThreshold}_{minLength}_{smoothingWindowSize}.geojson")
+            clipped.to_file(outPath, driver="GeoJSON")
 
-            # Per-file INFO
-            nPolys = int(len(clipped))
-            sumAreaSqm = float(clipped["area_m"].sum())
-            cc = classCounts
-            log.info("...segmentation for: ./%s → n=%d, area=%.3f km², classes={1:%d,2:%d,3:%d,4:%d,5:%d}",
-                     relPath(outPath, cairosDir), nPolys, (sumAreaSqm / 1e6),
-                     cc[1], cc[2], cc[3], cc[4], cc[5])
-
-            return outPath, nPolys, sumAreaSqm, classCounts
-
+            log.info("Segmented PRA → ./%s (%d polys)", relPath(outPath, cairosDir), len(clipped))
+            return outPath, len(clipped), float(clipped["area_m"].sum()), classCounts
     except Exception:
         log.exception("Segmentation failed for ./%s", relPath(inPath, cairosDir))
-        raise
+        return None, 0, 0.0, {k: 0 for k in sizeClasses}
 
 
 # ------------------ Main driver ------------------ #
 
 def runPraSegmentation(cfg, workFlowDir):
-    """
-    Step 06: PRA segmentation.
-    Intersects polygonized PRA from 05_praProcessing with **smoothed** subcatchments
-    from 04_praSubcatchments, writes results to 06_praSegmentation.
-    """
+    """Step 05: PRA segmentation (PRA GeoJSON × subcatchment SHP)."""
     tAll = time.perf_counter()
 
-    # --- Directories ---
-    cairosDir = workFlowDir['cairosDir']
-    praProcessingDir = workFlowDir['praProcessingDir']
-    praSubcatchmentsDir = workFlowDir['praSubcatchmentsDir']
-    praSegmentationDir = workFlowDir.get('praSegmentationDir') or os.path.join(cairosDir, "06_praSegmentation")
+    cairosDir = workFlowDir["cairosDir"]
+    praProcessingDir = workFlowDir["praProcessingDir"]
+    praSubcatchmentsDir = workFlowDir["praSubcatchmentsDir"]
+    praSegmentationDir = workFlowDir.get("praSegmentationDir") or os.path.join(cairosDir, "06_praSegmentation")
     os.makedirs(praSegmentationDir, exist_ok=True)
 
-    # --- Config ---
-    thrF = cfg['praSELECTION'].getfloat('selectedThreshold', fallback=0.30)
-    code3 = f"{int(round(thrF * 100)):03d}"  # robust (0.30 -> 030)
+    thrF = cfg["praSELECTION"].getfloat("selectedThreshold", fallback=0.30)
+    code3 = f"{int(round(thrF * 100)):03d}"
 
-    streamThreshold     = cfg['praSUBCATCHMENTS'].getint('streamThreshold', fallback=500)
-    minLength           = cfg['praSUBCATCHMENTS'].getint('minLength', fallback=100)
-    smoothingWindowSize = cfg['praSUBCATCHMENTS'].getint('smoothingWindowSize', fallback=5)
-    weightedSlopeFlow   = cfg['praSUBCATCHMENTS'].getboolean('weightedSlopeFlow', fallback=False)
+    subCfg = cfg["praSUBCATCHMENTS"]
+    streamThreshold = subCfg.getint("streamThreshold", fallback=500)
+    minLength = subCfg.getint("minLength", fallback=100)
+    smoothingWindowSize = subCfg.getint("smoothingWindowSize", fallback=5)
+    weightedSlopeFlow = subCfg.getboolean("weightedSlopeFlow", fallback=False)
 
-    # --- DEM as reference (CRS, cellSize, nodata) ---
-    inputDir = workFlowDir['inputDir']
-    demName  = cfg['MAIN'].get('DEM', '').strip()
-    demPath  = os.path.join(inputDir, demName)
+    inputDir = workFlowDir["inputDir"]
+    demName = cfg["MAIN"].get("DEM", "").strip()
+    demPath = os.path.join(inputDir, demName)
     _, demProfile = dataUtils.readRaster(demPath, return_profile=True)
-    demNoData = demProfile.get('nodata', 0)
-    cellSize  = demProfile['transform'][0]
-    demCrs    = demProfile['crs']
+    demCrs = demProfile["crs"]
 
-    # --- Size classes & filter from INI ---
     sizeClasses = loadSizeClasses(cfg)
-    sizeFilter  = cfg['praSEGMENTATION'].getfloat('sizeFilter', fallback=500.0)
+    sizeFilter = cfg["praSEGMENTATION"].getfloat("sizeFilter", fallback=500.0)
 
-    # --- Inputs ---
     praFiles = findPraFiles(praProcessingDir, code3)
     subcatchPath = buildSubcatchSmoothedPath(praSubcatchmentsDir, streamThreshold, minLength, smoothingWindowSize, weightedSlopeFlow)
 
-    # --- Parameters logging (minimal, as requested) ---
-    log.info("...PRA segmentation using: out=./%s, SubC=./%s, streamThr=%s, minLen=%s, smoothWin=%s, weightedSF=%s",
-             relPath(praSegmentationDir, cairosDir),
-             relPath(subcatchPath, cairosDir),
-             streamThreshold, minLength, smoothingWindowSize, weightedSlopeFlow)
+    log.info(
+        "Step 05: PRA segmentation → out=./%s, SubC=./%s",
+        relPath(praSegmentationDir, cairosDir),
+        relPath(subcatchPath, cairosDir),
+    )
 
-    # --- Early exits ---
     if not praFiles:
-        log.error("No polygonized PRA layers found matching pra%sec*_BnCh2.shp in ./%s", code3, relPath(praProcessingDir, cairosDir))
-        log.info("...PRA segmentation - failed (no inputs): %.2fs", time.perf_counter() - tAll)
+        log.error("No PRA GeoJSONs found in ./%s", relPath(praProcessingDir, cairosDir))
         return
     if not os.path.exists(subcatchPath):
-        log.error("Smoothed subcatchments file not found: ./%s", relPath(subcatchPath, cairosDir))
-        log.info("...PRA segmentation - failed (no subcatchments): %.2fs", time.perf_counter() - tAll)
+        log.error("Subcatchments file missing: ./%s", relPath(subcatchPath, cairosDir))
         return
 
-    # --- Read subcatchments once ---
+    # --- Convert SHP → GeoJSON if necessary ---
+    subcatchGeo = ensureGeojsonVersion(subcatchPath)
+
+    # --- Load subcatchments ---
     try:
-        subcatchGdf = geopandas.read_file(subcatchPath)
+        subcatchGdf = gpd.read_file(subcatchGeo)
     except Exception:
-        log.exception("Failed to read subcatchments: ./%s", relPath(subcatchPath, cairosDir))
-        log.info("...PRA segmentation - failed (read error): %.2fs", time.perf_counter() - tAll)
+        log.exception("Failed to read subcatchments: ./%s", relPath(subcatchGeo, cairosDir))
         return
 
-    # --- Optional CRS consistency check against DEM (log-only, do nothing) ---
-    try:
-        if subcatchGdf.crs == demCrs:
-            log.debug("Subcatchments CRS matches DEM CRS; no reprojection applied.")
-        else:
-            log.debug("Subcatchments CRS != DEM CRS; proceeding without changing geometry (areas still computed in meters).")
-    except Exception:
-        pass
-
-    # --- Process each PRA file ---
-    nOk, nFail = 0, 0
-    totalPolys, totalAreaSqm = 0, 0
+    # --- Process all PRA files ---
+    nOk, totalPolys, totalAreaSqm = 0, 0, 0
     totalClassCounts = {k: 0 for k in sizeClasses}
 
     totalPolysFiltered, totalAreaSqmFiltered = 0, 0
     totalClassCountsFiltered = {k: 0 for k in sizeClasses}
 
     for inPath in praFiles:
-        try:
-            outPath, nPolys, sumAreaSqm, classCounts = processSinglePraLayer(
-                inPath, subcatchGdf, praSegmentationDir,
-                streamThreshold, minLength, smoothingWindowSize,
-                cairosDir, sizeClasses, demCrs
-            )
-            if outPath is None:
-                # no intersection → skip both aggregation and filtering
-                continue
-
-            # --- aggregate originals ---
-            nOk += 1
-            totalPolys += nPolys
-            totalAreaSqm += float(sumAreaSqm)
-            for k in totalClassCounts:
-                totalClassCounts[k] += classCounts[k]
-
-            # --- filter and aggregate filtered stats ---
-            baseNoExt = os.path.splitext(os.path.basename(inPath))[0]
-            filteredBase = os.path.join(
-                praSegmentationDir,
-                f"{baseNoExt}_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
-            )
-            kept, removed, outShp, outGeo, filteredClasses = applySizeFilter(
-                outPath, sizeFilter, filteredBase, cairosDir, sizeClasses
-            )
-
-            totalPolysFiltered += int(kept)
-            if kept > 0 and os.path.exists(outShp):
-                gdfFiltered = geopandas.read_file(outShp)
-                if "area_m" in gdfFiltered:
-                    totalAreaSqmFiltered += float(gdfFiltered["area_m"].sum())
-            for k in totalClassCountsFiltered:
-                totalClassCountsFiltered[k] += filteredClasses[k]
-
-        except Exception:
-            nFail += 1
-            log.exception("Segmentation/filtering failed for ./%s", relPath(inPath, cairosDir))
+        outPath, nPolys, sumAreaSqm, classCounts = processSinglePraLayer(
+            inPath, subcatchGdf, praSegmentationDir,
+            streamThreshold, minLength, smoothingWindowSize,
+            cairosDir, sizeClasses, demCrs
+        )
+        if not outPath:
             continue
 
+        nOk += 1
+        totalPolys += nPolys
+        totalAreaSqm += sumAreaSqm
+        for k in totalClassCounts:
+            totalClassCounts[k] += classCounts[k]
 
-    # --- Done ---
+        baseNoExt = os.path.splitext(os.path.basename(inPath))[0]
+        filteredBase = os.path.join(
+            praSegmentationDir,
+            f"{baseNoExt}_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
+        )
+
+        kept, outGeo, filteredClasses = applySizeFilter(
+            outPath, sizeFilter, filteredBase, cairosDir, sizeClasses
+        )
+        totalPolysFiltered += kept
+        if kept > 0:
+            gdfF = gpd.read_file(outGeo)
+            totalAreaSqmFiltered += float(gdfF["area_m"].sum())
+        for k in totalClassCountsFiltered:
+            totalClassCountsFiltered[k] += filteredClasses[k]
+
     tDt = time.perf_counter() - tAll
 
-    # original stats
-    cc = totalClassCounts
-    log.info("...PRA segmentation stats: total pra=%d, total pra area=%.3f km², size classes={1:%d,2:%d,3:%d,4:%d,5:%d}",
-            totalPolys, (totalAreaSqm / 1e6),
-            cc[1], cc[2], cc[3], cc[4], cc[5])
-
-    # filtered stats
-    ccF = totalClassCountsFiltered
-    log.info("...PRA segmentation stats: filtered pra=%d, total pra area=%.3f km², size classes={1:%d,2:%d,3:%d,4:%d,5:%d}",
-            totalPolysFiltered, (totalAreaSqmFiltered / 1e6),
-            ccF[1], ccF[2], ccF[3], ccF[4], ccF[5])
-
-    log.info("...PRA segmentation - done: %.2fs", tDt)
-
+    cc, ccF = totalClassCounts, totalClassCountsFiltered
+    log.info("Step 05: total n=%d, area=%.3f km², classes={%s}",
+             totalPolys, totalAreaSqm / 1e6,
+             ", ".join(f"{k}:{cc[k]}" for k in cc))
+    log.info("Step 05: filtered n=%d, area=%.3f km², classes={%s}",
+             totalPolysFiltered, totalAreaSqmFiltered / 1e6,
+             ", ".join(f"{k}:{ccF[k]}" for k in ccF))
+    log.info("Step 05 complete in %.2fs", tDt)

@@ -1,14 +1,25 @@
+# ------------------ Step 01: PRA Delineation ------------------ #
+# Purpose: Generate PRA raster field from DEM and forest layers.
+# Inputs:  [MAIN] DEM, FOREST
+# Outputs: pra.tif, slope.tif, aspect.tif, ruggC.tif, windshelter.tif, forestC.tif
+# Config:  [praDELINEATION]
+# Consumes: none
+# Provides: input to praSelection and praProcessing
+
 import os
+import time
+import logging
+
 import numpy as np
 import rasterio
 from osgeo import gdal
 from numba import njit, prange
-import time
-import logging
 
 import in1Utils.dataUtils as dataUtils
+from in1Utils.dataUtils import timeIt
 
 log = logging.getLogger(__name__)
+
 
 # ------------------ Utility Functions ------------------ #
 
@@ -25,6 +36,7 @@ def sectorMask(shape, centre, radius, angleRange):
     angleMask = theta <= (tMax - tMin)
     return circMask * angleMask
 
+
 def windShelterPrep(radius, direction, tolerance, cellSize):
     xSize = ySize = 2 * radius + 1
     xArr, yArr = np.mgrid[0:xSize, 0:ySize]
@@ -33,6 +45,7 @@ def windShelterPrep(radius, direction, tolerance, cellSize):
     mask = sectorMask(dist.shape, (radius, radius), radius, (direction, tolerance))
     mask[radius, radius] = True
     return dist.astype(np.float32), mask.astype(np.bool_)
+
 
 @njit(parallel=True)
 def windShelterNumba(array, mask, dist, prob, radius, noData):
@@ -67,8 +80,10 @@ def windShelterNumba(array, mask, dist, prob, radius, noData):
 
     return ws
 
+
 def bellCurve(arr, a, b, c):
     return 1 / (1 + ((arr - c) / a) ** (2 * b))
+
 
 def slidingSum(arr):
     view = np.lib.stride_tricks.as_strided(
@@ -80,174 +95,315 @@ def slidingSum(arr):
 
 
 # ------------------ Main ------------------ #
+
 def runPraDelineation(cfg, workFlowDir):
     tAll = time.perf_counter()
 
     # --- Directories ---
-    inputDir  = workFlowDir['inputDir']
-    outputDir = workFlowDir['praDelineationDir']
-    cairosDir = workFlowDir['cairosDir']
+    inputDir = workFlowDir["inputDir"]
+    outputDir = workFlowDir["praDelineationDir"]
+    cairosDir = workFlowDir["cairosDir"]
+    os.makedirs(outputDir, exist_ok=True)
 
     # --- DEM & FOREST from [MAIN] ---
-    demName    = cfg['MAIN']['DEM']
-    forestName = cfg['MAIN']['FOREST']
-    demPath    = os.path.join(inputDir, demName)
+    demName = cfg["MAIN"]["DEM"]
+    forestName = cfg["MAIN"]["FOREST"]
+    demPath = os.path.join(inputDir, demName)
     forestPath = os.path.join(inputDir, forestName)
 
     # --- Parameters from [praDELINEATION] ---
-    praCfg             = cfg['praDELINEATION']
-    forestType         = praCfg.get('forestType', 'pcc')
-    saveAllThresholds  = praCfg.getboolean('saveAllThresholds', fallback=False)
-    singleThreshold    = praCfg.getfloat('singleThreshold', fallback=0.30)
-    radius             = praCfg.getint('radius', fallback=6)
-    prob               = praCfg.getfloat('prob', fallback=0.5)
-    windDir            = praCfg.getint('windDir', fallback=0)
-    windTol            = praCfg.getint('windTol', fallback=180)
+    praCfg = cfg["praDELINEATION"]
+    forestType = praCfg.get("forestType", "pcc")
+    saveAllThresholds = praCfg.getboolean("saveAllThresholds", fallback=False)
+    singleThreshold = praCfg.getfloat("singleThreshold", fallback=0.30)
+    radius = praCfg.getint("radius", fallback=6)
+    prob = praCfg.getfloat("prob", fallback=0.5)
+    windDir = praCfg.getint("windDir", fallback=0)
+    windTol = praCfg.getint("windTol", fallback=180)
 
     # --- Log main parameters in unified style ---
-    relDemPath    = os.path.relpath(demPath, start=cairosDir)
+    relDemPath = os.path.relpath(demPath, start=cairosDir)
     relForestPath = os.path.relpath(forestPath, start=cairosDir)
     log.info(
-        "...PRA delineation using: DEM=./%s, FOREST=./%s, forestType=%s, thr=%.2f, radius=%d, prob=%.2f, windDir=%d±%d",
-        relDemPath, relForestPath, forestType, singleThreshold, radius, prob, windDir, windTol
+        "...PRA delineation using: DEM=./%s, FOREST=./%s, forestType=%s, thr=%.2f, "
+        "radius=%d, prob=%.2f, windDir=%d±%d",
+        relDemPath,
+        relForestPath,
+        forestType,
+        singleThreshold,
+        radius,
+        prob,
+        windDir,
+        windTol,
     )
 
     praDelineationDir = outputDir
 
-    # --- Load DEM as reference (need profile + nodata) ---
+    # --- Load DEM as reference (profile + nodata drives all outputs) ---
     dem, demProfile = dataUtils.readRaster(demPath, return_profile=True)
-    demNoData = demProfile.get('nodata', 0)
-    cellSize  = demProfile['transform'][0]
+    demNoData = demProfile.get("nodata", 0)
+    cellSize = demProfile["transform"][0]
 
-    # Step: Slope & Aspect
-    t = time.perf_counter()
-    slopePath  = os.path.join(praDelineationDir, "slope.tif")
+    # ------------------------------------------------------------------
+    # Step 1: Slope & Aspect (DEM → slope.tif, aspect.tif, aligned to DEM)
+    # ------------------------------------------------------------------
+    slopePath = os.path.join(praDelineationDir, "slope.tif")
     aspectPath = os.path.join(praDelineationDir, "aspect.tif")
-    if not os.path.exists(slopePath) or not os.path.exists(aspectPath):
-        demDs = gdal.Open(demPath)
-        gdal.DEMProcessing(slopePath, demDs, "slope", computeEdges=True)
-        gdal.DEMProcessing(aspectPath, demDs, "aspect", computeEdges=True)
-        del demDs
-        arr, _ = dataUtils.readRaster(slopePath, return_profile=True)
-        dataUtils.saveRaster(demPath, slopePath, arr.astype("float32"), dtype="float32", nodata=demNoData)
-        arr, _ = dataUtils.readRaster(aspectPath, return_profile=True)
-        dataUtils.saveRaster(demPath, aspectPath, arr.astype("float32"), dtype="float32", nodata=demNoData)
-        log.info("...slope/aspect - done: %.2fs", time.perf_counter() - t)
 
-    # Windshelter
-    t = time.perf_counter()
-    dist, mask = windShelterPrep(radius, windDir - windTol + 270, windDir + windTol + 270, cellSize)
-    wsArr = windShelterNumba(dem, mask.astype(np.float32), dist.astype(np.float32), prob, radius, demNoData)
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, 'windshelter.tif'),
-                         wsArr[np.newaxis, ...], dtype="float32", nodata=demNoData)
-    log.info("...windshelter (numba) - done: %.2fs", time.perf_counter() - t)
+    with timeIt("slope/aspect", level=logging.INFO):
+        if not os.path.exists(slopePath) or not os.path.exists(aspectPath):
+            demDs = gdal.Open(demPath)
+            gdal.DEMProcessing(slopePath, demDs, "slope", computeEdges=True)
+            gdal.DEMProcessing(aspectPath, demDs, "aspect", computeEdges=True)
+            del demDs
 
-    # Ruggedness
-    t = time.perf_counter()
-    aspect, _ = dataUtils.readRaster(aspectPath, return_profile=True)
-    slope2d, _ = dataUtils.readRaster(slopePath, return_profile=True)
+            arr, _ = dataUtils.readRaster(slopePath, return_profile=True)
+            dataUtils.saveRaster(
+                demPath,
+                slopePath,
+                arr.astype("float32")[np.newaxis, ...],
+                dtype="float32",
+                nodata=demNoData,
+            )
+            arr, _ = dataUtils.readRaster(aspectPath, return_profile=True)
+            dataUtils.saveRaster(
+                demPath,
+                aspectPath,
+                arr.astype("float32")[np.newaxis, ...],
+                dtype="float32",
+                nodata=demNoData,
+            )
+            log.info("...slope/aspect created from DEM")
+        else:
+            log.info("...slope/aspect already exist → reusing existing rasters")
 
-    slopeRad = slope2d * np.pi / 180
-    aspectRad = aspect * np.pi / 180
-    xyRaster = np.sin(slopeRad)
-    zRaster  = np.cos(slopeRad)
-    xRaster  = np.sin(aspectRad) * xyRaster
-    yRaster  = np.cos(aspectRad) * xyRaster
+    # ------------------------------------------------------------------
+    # Step 2: Windshelter (DEM + kernel geometry)
+    # ------------------------------------------------------------------
+    with timeIt("windshelter (numba)", level=logging.INFO):
+        dist, mask = windShelterPrep(
+            radius,
+            windDir - windTol + 270,
+            windDir + windTol + 270,
+            cellSize,
+        )
+        wsArr = windShelterNumba(
+            dem, mask.astype(np.float32), dist.astype(np.float32), prob, radius, demNoData
+        )
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "windshelter.tif"),
+            wsArr[np.newaxis, ...],
+            dtype="float32",
+            nodata=demNoData,
+        )
 
-    ySumRaster = slidingSum(yRaster)
-    xSumRaster = slidingSum(xRaster)
-    zSumRaster = slidingSum(zRaster)
+    # ------------------------------------------------------------------
+    # Step 3: Ruggedness (slope + aspect)
+    # ------------------------------------------------------------------
+    with timeIt("ruggedness", level=logging.INFO):
+        aspect, _ = dataUtils.readRaster(aspectPath, return_profile=True)
+        slope2d, _ = dataUtils.readRaster(slopePath, return_profile=True)
 
-    resultRaster = np.sqrt(xSumRaster**2 + ySumRaster**2 + zSumRaster**2)
-    ruggednessRaster = (1 - (resultRaster / 9))
-    ruggednessRaster = np.pad(ruggednessRaster, (1, 1), "constant", constant_values=(0, 0))
-    rugg = ruggednessRaster.reshape(1, *ruggednessRaster.shape)
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, "ruggedness.tif"),
-                         rugg, dtype="float32", nodata=demNoData)
-    log.info("...ruggedness - done: %.2fs", time.perf_counter() - t)
+        slopeRad = slope2d * np.pi / 180.0
+        aspectRad = aspect * np.pi / 180.0
+        xyRaster = np.sin(slopeRad)
+        zRaster = np.cos(slopeRad)
+        xRaster = np.sin(aspectRad) * xyRaster
+        yRaster = np.cos(aspectRad) * xyRaster
 
-    t = time.perf_counter()
-    ruggC = (rugg >= 0.02).astype("float32")
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, "ruggC.tif"),
-                         ruggC, dtype="float32", nodata=demNoData)
-    log.info("...ruggC - done: %.2fs", time.perf_counter() - t)
+        ySumRaster = slidingSum(yRaster)
+        xSumRaster = slidingSum(xRaster)
+        zSumRaster = slidingSum(zRaster)
 
-    # Curves
-    t = time.perf_counter()
-    slopeBand1, _ = dataUtils.readRaster(slopePath, return_profile=True)
-    windShelterBand1, _ = dataUtils.readRaster(os.path.join(praDelineationDir, "windshelter.tif"), return_profile=True)
-    slope       = slopeBand1[np.newaxis, ...]
-    windShelter = windShelterBand1[np.newaxis, ...]
+        resultRaster = np.sqrt(xSumRaster**2 + ySumRaster**2 + zSumRaster**2)
+        ruggednessRaster = 1 - (resultRaster / 9.0)
+        ruggednessRaster = np.pad(
+            ruggednessRaster, (1, 1), "constant", constant_values=(0, 0)
+        )
+        rugg = ruggednessRaster.reshape(1, *ruggednessRaster.shape)
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "ruggedness.tif"),
+            rugg,
+            dtype="float32",
+            nodata=demNoData,
+        )
 
-    slopeC = bellCurve(slope, 11, 4, 43)
-    slopeC[0] = np.where(slope[0] > 60, 0., slopeC[0])
-    slopeC[0] = np.where(slope[0] < 28, 0., slopeC[0])
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, "slopeC.tif"),
-                         slopeC, dtype="float32", nodata=demNoData)
-    log.info("...slopeC - done: %.2fs", time.perf_counter() - t)
+        ruggC = (rugg >= 0.02).astype("float32")
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "ruggC.tif"),
+            ruggC,
+            dtype="float32",
+            nodata=demNoData,
+        )
 
-    t = time.perf_counter()
-    windShelterC = bellCurve(windShelter, 2, 5, 2).astype('float32')
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, "windshelterC.tif"),
-                         windShelterC, dtype="float32", nodata=demNoData)
-    log.info("...windshelterC - done: %.2fs", time.perf_counter() - t)
+    # ------------------------------------------------------------------
+    # Step 4: Curves (slopeC, windshelterC)
+    # ------------------------------------------------------------------
+    with timeIt("slopeC & windshelterC", level=logging.INFO):
+        slopeBand1, _ = dataUtils.readRaster(slopePath, return_profile=True)
+        windShelterBand1, _ = dataUtils.readRaster(
+            os.path.join(praDelineationDir, "windshelter.tif"),
+            return_profile=True,
+        )
+        slope = slopeBand1[np.newaxis, ...]
+        windShelter = windShelterBand1[np.newaxis, ...]
 
-    # Forest
-    if forestType == 'stems':
+        slopeC = bellCurve(slope, 11, 4, 43)
+        slopeC[0] = np.where(slope[0] > 60, 0.0, slopeC[0])
+        slopeC[0] = np.where(slope[0] < 28, 0.0, slopeC[0])
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "slopeC.tif"),
+            slopeC,
+            dtype="float32",
+            nodata=demNoData,
+        )
+
+        windShelterC = bellCurve(windShelter, 2, 5, 2).astype("float32")
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "windshelterC.tif"),
+            windShelterC,
+            dtype="float32",
+            nodata=demNoData,
+        )
+
+    # ------------------------------------------------------------------
+    # Step 5: Forest contribution (forestC) + DEM/FOREST grid check
+    # ------------------------------------------------------------------
+    if forestType == "stems":
         a, b, c = 350, 2.5, -150
-    elif forestType in ('pcc', 'no_forest'):
+    elif forestType in ("pcc", "no_forest"):
         a, b, c = 40, 3.5, -15
-    elif forestType == 'bav':
+    elif forestType == "bav":
         a, b, c = 20, 3.5, -10
-    elif forestType == 'sen2cc':
+    elif forestType == "sen2cc":
         a, b, c = 50, 1.5, 0
     else:
         raise ValueError("Unknown forest type.")
 
-    t = time.perf_counter()
-    if forestType in ['pcc', 'stems', 'bav', 'sen2cc']:
-        forest2d, _ = dataUtils.readRaster(forestPath, return_profile=True)
-        forest = forest2d[np.newaxis, ...]
-    elif forestType == 'no_forest':
-        dem2d, _ = dataUtils.readRaster(demPath, return_profile=True)
-        forest = np.where(dem2d > -100, 0, dem2d)[np.newaxis, ...]
-    forestC = bellCurve(forest, a, b, c)
-    forestC = np.where(forestC <= 0, 1, forestC).astype('float32')
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, "forestC.tif"),
-                         forestC, dtype="float32", nodata=demNoData)
-    log.info("...forestC - done: %.2fs", time.perf_counter() - t)
+    with timeIt("forestC", level=logging.INFO):
+        if forestType in ["pcc", "stems", "bav", "sen2cc"]:
+            forest2d, forestProfile = dataUtils.readRaster(
+                forestPath, return_profile=True
+            )
 
-    # PRA
-    t = time.perf_counter()
-    ruggC2d, _ = dataUtils.readRaster(os.path.join(praDelineationDir, "ruggC.tif"), return_profile=True)
-    ruggC = ruggC2d[np.newaxis, ...]
-    minVar = np.minimum(slopeC, windShelterC)
-    minVar = np.minimum(minVar, forestC)
-    pra = (1 - minVar) * minVar + minVar * (slopeC + windShelterC + forestC) / 3
-    pra = pra - ruggC
-    pra = np.float32(pra)
-    pra[pra <= 0] = 0
-    dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, 'pra.tif'),
-                         pra, dtype="float32", nodata=demNoData)
-    log.info("...continuous PRA - done: %.2fs", time.perf_counter() - t)
+            # DEM ↔ FOREST compatibility (log-only; no resampling here)
+            issues = []
+            if forestProfile.get("crs") != demProfile.get("crs"):
+                issues.append("CRS")
+            if forestProfile.get("transform") != demProfile.get("transform"):
+                issues.append("transform")
+            fw, fh = forestProfile.get("width"), forestProfile.get("height")
+            dw, dh = demProfile.get("width"), demProfile.get("height")
+            if (fw, fh) != (dw, dh):
+                issues.append("dimensions")
 
-    # PRA Thresholding
-    t = time.perf_counter()
-    pra2d, _ = dataUtils.readRaster(os.path.join(praDelineationDir, 'pra.tif'), return_profile=True)
-    praRead = pra2d[np.newaxis, ...]
-    if saveAllThresholds:
-        for praThreshold in np.arange(0.00, 1.01, 0.01):
-            binary = (praRead >= praThreshold).astype('int16')
-            fileName = f"pra_binary_th{int(praThreshold*100):03d}.tif"
-            dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, fileName),
-                                 binary, dtype="int16", nodata=-9999)
-        log.info("...save all binary PRA thresholds - done")
-    else:
-        praThreshold = singleThreshold
-        binary = (praRead >= praThreshold).astype('int16')
-        fileName = f"pra_binary_th{int(praThreshold*100):03d}.tif"
-        dataUtils.saveRaster(demPath, os.path.join(praDelineationDir, fileName),
-                             binary, dtype="int16", nodata=-9999)
-        log.info("...save single binary PRA %.2f threshold - done", praThreshold)
+            if issues:
+                log.warning(
+                    "DEM/FOREST grid mismatch (%s). DEM=(crs=%s, size=%sx%s), "
+                    "FOREST=(crs=%s, size=%sx%s)",
+                    ", ".join(issues),
+                    demProfile.get("crs"),
+                    dw,
+                    dh,
+                    forestProfile.get("crs"),
+                    fw,
+                    fh,
+                )
+
+            forest = forest2d[np.newaxis, ...]
+        elif forestType == "no_forest":
+            dem2d, _ = dataUtils.readRaster(demPath, return_profile=True)
+            forest = np.where(dem2d > -100, 0, dem2d)[np.newaxis, ...]
+        else:
+            # Should not reach here due to earlier check
+            forest = None  # type: ignore
+
+        forestC = bellCurve(forest, a, b, c)
+        forestC = np.where(forestC <= 0, 1, forestC).astype("float32")
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "forestC.tif"),
+            forestC,
+            dtype="float32",
+            nodata=demNoData,
+        )
+
+    # ------------------------------------------------------------------
+    # Step 6: Continuous PRA (pra.tif) from slopeC, windshelterC, forestC, ruggC
+    # ------------------------------------------------------------------
+    with timeIt("continuous PRA", level=logging.INFO):
+        ruggC2d, _ = dataUtils.readRaster(
+            os.path.join(praDelineationDir, "ruggC.tif"),
+            return_profile=True,
+        )
+        ruggC = ruggC2d[np.newaxis, ...]
+
+        # reload slopeC / windshelterC to avoid carrying large arrays around
+        slopeC, _ = dataUtils.readRaster(
+            os.path.join(praDelineationDir, "slopeC.tif"),
+            return_profile=True,
+        )
+        slopeC = slopeC[np.newaxis, ...]
+        windShelterC, _ = dataUtils.readRaster(
+            os.path.join(praDelineationDir, "windshelterC.tif"),
+            return_profile=True,
+        )
+        windShelterC = windShelterC[np.newaxis, ...]
+
+        minVar = np.minimum(slopeC, windShelterC)
+        minVar = np.minimum(minVar, forestC)
+
+        pra = (1 - minVar) * minVar + minVar * (slopeC + windShelterC + forestC) / 3.0
+        pra = pra - ruggC
+        pra = np.float32(pra)
+        pra[pra <= 0] = 0
+
+        dataUtils.saveRaster(
+            demPath,
+            os.path.join(praDelineationDir, "pra.tif"),
+            pra,
+            dtype="float32",
+            nodata=demNoData,
+        )
+
+    # ------------------------------------------------------------------
+    # Step 7: PRA Thresholding (binary PRA masks)
+    # ------------------------------------------------------------------
+    with timeIt("PRA thresholding", level=logging.INFO):
+        pra2d, _ = dataUtils.readRaster(
+            os.path.join(praDelineationDir, "pra.tif"),
+            return_profile=True,
+        )
+        praRead = pra2d[np.newaxis, ...]
+
+        if saveAllThresholds:
+            for praThreshold in np.arange(0.00, 1.01, 0.01):
+                binary = (praRead >= praThreshold).astype("int16")
+                fileName = f"pra_binary_th{int(praThreshold * 100):03d}.tif"
+                dataUtils.saveRaster(
+                    demPath,
+                    os.path.join(praDelineationDir, fileName),
+                    binary,
+                    dtype="int16",
+                    nodata=-9999,
+                )
+            log.info("...save all binary PRA thresholds - done")
+        else:
+            praThreshold = singleThreshold
+            binary = (praRead >= praThreshold).astype("int16")
+            fileName = f"pra_binary_th{int(praThreshold * 100):03d}.tif"
+            dataUtils.saveRaster(
+                demPath,
+                os.path.join(praDelineationDir, fileName),
+                binary,
+                dtype="int16",
+                nodata=-9999,
+            )
+            log.info("...save single binary PRA %.2f threshold - done", praThreshold)
 
     log.info("...PRA delineation - done: %.2fs", time.perf_counter() - tAll)

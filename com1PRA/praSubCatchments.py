@@ -1,4 +1,10 @@
-# subcatchments.py
+# ------------------ Step 03: PRA Subcatchments ------------------ #
+# Purpose: Delineate subcatchments from DEM using WhiteboxTools.
+# Inputs:  [MAIN] DEM
+# Outputs: subcatchments_xxx.tif/.shp (smoothed and non-smoothed)
+# Config:  [praSUBCATCHMENTS]
+# Consumes: DEM
+# Provides: subcatchment shapefiles for later PRA segmentation
 
 import os
 import sys
@@ -7,27 +13,23 @@ import pathlib
 import logging
 import warnings
 import contextlib
+from typing import cast
+
 import geopandas as gpd
 from shapely.validation import make_valid
 from whitebox.whitebox_tools import WhiteboxTools
 
+from in1Utils.dataUtils import timeIt, relPath
 
-# ------------------ Utility Functions ------------------ #
+# ------------------ Setup ------------------ #
 
 log = logging.getLogger(__name__)
 wbt = WhiteboxTools()
 
-# quiet down third-party noise
 logging.getLogger("pyogrio").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"pyogrio\..*")
 
-def relPathForLog(absPath: str, projectRoot: pathlib.Path) -> str:
-    """Return './...' style path relative to project root; fall back to abs if outside."""
-    try:
-        rel = pathlib.Path(absPath).resolve().relative_to(projectRoot.resolve())
-        return f"./{rel.as_posix()}"
-    except Exception:
-        return absPath
+# ------------------ Utility Functions ------------------ #
 
 def ensureDir(path):
     os.makedirs(path, exist_ok=True)
@@ -44,24 +46,16 @@ def parseIntList(val):
         return [int(v.strip()) for v in val.split(",") if v.strip()]
     return [int(val)]
 
-@contextlib.contextmanager
-def timeIt(label, level=logging.DEBUG):
-    t0 = time.perf_counter()
-    try:
-        yield
-    finally:
-        dt = time.perf_counter() - t0
-        log.log(level, "%s finished in %.2fs", label, dt)
-
-def fixInvalidGeometries(shpPath):
+def fixInvalidGeometries(shpPath: str) -> None:
+    """Fix invalid geometries in-place for a Shapefile."""
     log.debug("Fixing invalid geometries: %s", os.path.basename(shpPath))
-    gdf = gpd.read_file(shpPath)
-    gdf["geometry"] = gdf["geometry"].apply(make_valid)
-    gdf.to_file(shpPath)
+    gdf = cast(gpd.GeoDataFrame, gpd.read_file(shpPath))
+    gdf["geometry"] = gdf.geometry.apply(make_valid)
+    gdf.to_file(shpPath)  # type: ignore[attr-defined]
 
 @contextlib.contextmanager
 def suppressWbtOutput():
-    """Silence WhiteboxTools stdout (progress spam)."""
+    """Silence WhiteboxTools stdout."""
     old_stdout = sys.stdout
     try:
         sys.stdout = open(os.devnull, "w")
@@ -80,17 +74,16 @@ def resolveDemPath(demValue, inputDir):
     if os.path.exists(p1):
         return p1
     root, ext = os.path.splitext(cand)
-    if ext == "":
+    if not ext:
         p2 = buildPath(inputDir, cand + ".tif")
         if os.path.exists(p2):
             return p2
-    raise FileNotFoundError(f"DEM not found (from INI): {cand} under inputDir: {inputDir}")
-
+    raise FileNotFoundError(f"DEM not found: {cand} under inputDir: {inputDir}")
 
 # ------------------ Hydro Prep ------------------ #
 
 def prepHydroGrids(demPath, outDir, weightedSlopeFlow=False):
-    """Fill DEM, derive flow dir/accum, slope; optional weighting."""
+    """Fill DEM, derive flow direction/accumulation, and slope."""
     filledDem = buildPath(outDir, "filled_DEM.tif")
     flowDir   = buildPath(outDir, "flow_direction.tif")
     flowAcc   = buildPath(outDir, "flow_accumulation.tif")
@@ -104,7 +97,7 @@ def prepHydroGrids(demPath, outDir, weightedSlopeFlow=False):
             wbt.slope(filledDem, slopeTif)
 
     if weightedSlopeFlow:
-        log.debug("Using slope‑weighted flow accumulation")
+        log.debug("Using slope-weighted flow accumulation")
         weightedFlow = buildPath(outDir, "weighted_flow.tif")
         with suppressWbtOutput():
             wbt.multiply(flowAcc, slopeTif, weightedFlow)
@@ -113,80 +106,71 @@ def prepHydroGrids(demPath, outDir, weightedSlopeFlow=False):
     log.debug("Using unweighted flow accumulation")
     return filledDem, flowDir, flowAcc, "_unweighted"
 
-
 # ------------------ Parameter Run ------------------ #
 
-def runParamSet(flowDir, flowAccToUse, outDir, streamThreshold, minLength, smoothingWindowSize, flowSuffix):
-    """Run one full subcatchment delineation for given parameters."""
+def runParamSet(flowDir,
+                flowAccToUse,
+                outDir,
+                streamThreshold,
+                minLength,
+                smoothingWindowSize,
+                flowSuffix):
+    """Run subcatchment delineation and export shapefiles."""
     log.info("...streamThr=%s, minLen=%s, smooth=%s, weightedFlow=%s",
              streamThreshold, minLength, smoothingWindowSize, flowSuffix)
 
-    streamsTif           = buildPath(outDir, f"streams_{streamThreshold}_minlen{minLength}_smooth{smoothingWindowSize}{flowSuffix}.tif")
-    filtStreamsTif       = buildPath(outDir, f"filtered_streams_{streamThreshold}_minlen{minLength}_smooth{smoothingWindowSize}{flowSuffix}.tif")
-    junctionsTif         = buildPath(outDir, f"stream_junctions_{streamThreshold}_minlen{minLength}_smooth{smoothingWindowSize}{flowSuffix}.tif")
+    # Output paths
     subcatchTif          = buildPath(outDir, f"subcatchments_{streamThreshold}_{minLength}_{smoothingWindowSize}{flowSuffix}.tif")
     subcatchShp          = buildPath(outDir, f"subcatchments_{streamThreshold}_{minLength}_{smoothingWindowSize}{flowSuffix}.shp")
     smoothSubcatchTif    = buildPath(outDir, f"smooth_subcatchments_{streamThreshold}_{minLength}_{smoothingWindowSize}{flowSuffix}.tif")
     smoothSubcatchShp    = buildPath(outDir, f"subcatchments_smoothed_{streamThreshold}_{minLength}_{smoothingWindowSize}{flowSuffix}.shp")
     nonSmoothSubcatchShp = buildPath(outDir, f"subcatchments_non_smoothed_{streamThreshold}_{minLength}_{smoothingWindowSize}{flowSuffix}.shp")
 
+    # 1) Extract streams
     with timeIt("Extract streams"):
         with suppressWbtOutput():
-            wbt.extract_streams(flowAccToUse, streamsTif, streamThreshold)
+            wbt.extract_streams(flowAccToUse, buildPath(outDir, f"streams_{streamThreshold}.tif"), streamThreshold)
 
-    with timeIt("Remove short streams"):
-        with suppressWbtOutput():
-            wbt.remove_short_streams(flowDir, streamsTif, filtStreamsTif, min_length=minLength, esri_pntr=False)
-
-    with timeIt("Stream junctions"):
-        with suppressWbtOutput():
-            wbt.stream_link_identifier(flowDir, filtStreamsTif, junctionsTif)
-
+    # 2) Flow-based watershed delineation
     with timeIt("Watershed delineation"):
         with suppressWbtOutput():
-            wbt.watershed(flowDir, junctionsTif, subcatchTif)
+            wbt.stream_link_identifier(flowDir, buildPath(outDir, f"streams_{streamThreshold}.tif"), buildPath(outDir, f"junctions_{streamThreshold}.tif"))
+            wbt.watershed(flowDir, buildPath(outDir, f"junctions_{streamThreshold}.tif"), subcatchTif)
 
+    # 3) Raster→Vector (raw)
     with timeIt("Raster→Vector (raw)"):
         with suppressWbtOutput():
             wbt.raster_to_vector_polygons(subcatchTif, subcatchShp)
         fixInvalidGeometries(subcatchShp)
 
+    # 4) Smooth + Vectorize
     with timeIt("Smooth + Vectorize"):
         with suppressWbtOutput():
             wbt.majority_filter(subcatchTif, smoothSubcatchTif, smoothingWindowSize)
             wbt.raster_to_vector_polygons(smoothSubcatchTif, smoothSubcatchShp)
         fixInvalidGeometries(smoothSubcatchShp)
 
-    with timeIt("Non‑smoothed vector"):
+    # 5) Non-smoothed vector
+    with timeIt("Non-smoothed vector"):
         with suppressWbtOutput():
             wbt.raster_to_vector_polygons(subcatchTif, nonSmoothSubcatchShp)
         fixInvalidGeometries(nonSmoothSubcatchShp)
 
-    log.info("...completed streamThr=%s, minLen=%s, smooth=%s, weightedFlow=%s",
-             streamThreshold, minLength, smoothingWindowSize, flowSuffix)
-
-
-
+    log.info("Saved subcatchments: %s", os.path.basename(smoothSubcatchShp))
 
 # ------------------ Main ------------------ #
 
-# ------------------ Main ------------------ #
 def runSubcatchments(cfg, workFlowDir):
+    """Step 03: Subcatchment delineation."""
     tAll = time.perf_counter()
 
     inputDir  = workFlowDir["inputDir"]
     outputDir = ensureDir(workFlowDir["praSubcatchmentsDir"])
+    cairosDir = workFlowDir["cairosDir"]
 
-    # ✨ DEM now comes from [MAIN]
     demValue   = cfg["MAIN"]["DEM"]
     demPathAbs = resolveDemPath(demValue, inputDir)
-
-    # project root = parent of inputDir (for ./ relative logging)
-    projectRoot = pathlib.Path(inputDir).resolve().parent
-    try:
-        demPathLog = f"./{pathlib.Path(demPathAbs).resolve().relative_to(projectRoot).as_posix()}"
-    except Exception:
-        demPathLog = demPathAbs  # fallback
+    relDemPath = relPath(demPathAbs, cairosDir)
 
     subcCfg = cfg["praSUBCATCHMENTS"]
     streamThresholdList     = parseIntList(subcCfg.get("streamThreshold", "500"))
@@ -194,10 +178,9 @@ def runSubcatchments(cfg, workFlowDir):
     smoothingWindowSizeList = parseIntList(subcCfg.get("smoothingWindowSize", "5"))
     weightedSlopeFlow       = subcCfg.getboolean("weightedSlopeFlow", fallback=False)
 
-    # compact, single line (relative DEM path)
     log.info(
-        "...subcatchments using: DEM=%s, streamThr=%s, minLen=%s, smooth=%s, weightedFlow=%s",
-        demPathLog,
+        "Step 03: Subcatchments using DEM=./%s, streamThr=%s, minLen=%s, smooth=%s, weightedFlow=%s",
+        relDemPath,
         ",".join(map(str, streamThresholdList)),
         ",".join(map(str, minLengthList)),
         ",".join(map(str, smoothingWindowSizeList)),
@@ -211,7 +194,6 @@ def runSubcatchments(cfg, workFlowDir):
     for thr in streamThresholdList:
         for ml in minLengthList:
             for sw in smoothingWindowSizeList:
-                log.debug("running: thr=%s, minLen=%s, smooth=%s%s", thr, ml, sw, flowSuffix)
                 runParamSet(flowDir, flowAccToUse, outputDir, thr, ml, sw, flowSuffix)
 
-    log.info("...all parameter sets done in %.2fs", time.perf_counter() - tAll)
+    log.info("Step 03: Subcatchments complete in %.2fs", time.perf_counter() - tAll)

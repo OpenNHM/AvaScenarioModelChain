@@ -106,7 +106,7 @@ cd Cairos
 # Clean any old envs if something is corrupted
 rm -f pixi.lock
 pixi clean -e dev || true
-pixi clean cache || true
+#pixi clean cache || true
 rm -rf .pixi
 
 # Install dev env (with local AvaFrame)

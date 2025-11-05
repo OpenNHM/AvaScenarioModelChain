@@ -12,6 +12,11 @@ from datetime import datetime
 from typing import Union, Dict, Any, List, Optional
 import hashlib
 import re
+import sys
+import pathlib
+from osgeo import gdal
+
+
 
 log = logging.getLogger(__name__)
 
@@ -229,3 +234,57 @@ def hashGroup(bandLabel: str, sizeClass: int, aspect: str) -> str:
     h = int(hashlib.sha1(key.encode("utf-8")).hexdigest(), 16)
     group_num = 10 + (h % 90)  # ensures 10–99
     return f"{group_num:02d}"
+
+
+
+
+# ----------------------------------------------------------------------
+# GDAL / PROJ environment setup
+# ----------------------------------------------------------------------
+
+def setupGdalEnv(verbose: bool = False) -> None:
+    """
+    Configure GDAL and PROJ environment variables for Pixi-based installations.
+
+    Ensures that:
+      - GDAL_DATA and PROJ_LIB point to the correct <env>/share directories
+      - PAM is disabled (no .aux.xml creation)
+      - Directory scanning is off for speed
+      - PROJ networking is disabled for reproducibility
+      - GDAL exceptions are enabled to avoid FutureWarnings
+
+    Call once at program startup (e.g., in runCairos.py).
+    """
+
+
+    env_prefix = pathlib.Path(sys.prefix)
+    gdal_data = env_prefix / "share" / "gdal"
+    proj_data = env_prefix / "share" / "proj"
+
+    os.environ.update({
+        "PROJ_LIB": str(proj_data),
+        "GDAL_DATA": str(gdal_data),
+        "GDAL_PAM_ENABLED": "NO",
+        "GDAL_DISABLE_READDIR_ON_OPEN": "YES",
+        "GTIFF_SRS_SOURCE": "EPSG",
+        "CPL_DEBUG": "OFF",
+        "CPL_LOG": "/dev/null",
+        "PROJ_NETWORK": "OFF",
+    })
+
+    # Enable GDAL exceptions to avoid FutureWarning in 4.0+
+    try:
+        gdal.UseExceptions()
+    except Exception:
+        log.debug("setupGdalEnv: Could not enable GDAL exceptions")
+
+    # Optional verification & debug output
+    if verbose:
+        log.info("GDAL/PROJ environment initialized with prefix: %s", env_prefix)
+        for key in ("GDAL_DATA", "PROJ_LIB"):
+            val = os.environ.get(key, "")
+            exists = pathlib.Path(val).exists()
+            log.info("  %s = %s%s", key, val, "" if exists else "  [⚠ not found]")
+
+    # Log concise debug message at default verbosity
+    log.debug("GDAL/PROJ environment initialized with prefix: %s", env_prefix)

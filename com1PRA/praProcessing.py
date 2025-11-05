@@ -1,20 +1,25 @@
-# praProcessing.py
-
+# ------------------ Step 04: PRA Processing ------------------ #
+# Purpose: Clean PRA masks (binary connectivity) and polygonize results.
+# Inputs:  PRA rasters from Step 02 (praSelectionDir), DEM
+# Outputs: Cleaned PRA rasters (_BnCh1, _BnCh2) + GeoJSON polygons
+# Config:  [praPROCESSING]
+# Consumes: PRA masks from Step 02
+# Provides: PRA polygons for later segmentation
 
 import os
 import glob
-import logging
 import time
-
+import logging
 import numpy as np
+from typing import cast
 from scipy.ndimage import convolve
-
 import rasterio
 from rasterio.features import shapes
 import geopandas as gpd
 from shapely.geometry import shape
 
 import in1Utils.dataUtils as dataUtils
+from in1Utils.dataUtils import timeIt, relPath
 
 log = logging.getLogger(__name__)
 
@@ -24,24 +29,20 @@ def runPraCleaning(cfg, workFlowDir, demPath, selectedFiles):
     """
     Two-pass neighborhood cleaning for PRA rasters.
 
-    Pass 1 (direct neighbors N/E/S/W): keep only cells with >= minDirectNeighborsPass1.
-    Pass 2 (diagonal neighbors NW/NE/SW/SE): keep only cells with >= minDiagonalNeighborsPass2.
-
-    Writes outputs into workFlowDir['praProcessingDir'] as:
-      <base>_BnCh1.tif  and  <base>_BnCh2.tif
-
-    Returns a list of final outputs; on failure for a file, falls back to the original path.
+    Pass 1: keep cells with >= minDirectNeighborsPass1 (N/E/S/W)
+    Pass 2: keep cells with >= minDiagonalNeighborsPass2 (NW/NE/SW/SE)
     """
-    rel = lambda p: os.path.relpath(p, start=workFlowDir['cairosDir'])
-    outDir = workFlowDir['praProcessingDir']
+    outDir = workFlowDir["praProcessingDir"]
+    cairosDir = workFlowDir["cairosDir"]
     os.makedirs(outDir, exist_ok=True)
 
-    # INI parameters (with safe fallbacks)
-    p1_min = cfg['praPROCESSING'].getint('minDirectNeighborsPass1', fallback=3)
-    p2_min = cfg['praPROCESSING'].getint('minDiagonalNeighborsPass2', fallback=2)
+    p1_min = cfg["praPROCESSING"].getint("minDirectNeighborsPass1", fallback=3)
+    p2_min = cfg["praPROCESSING"].getint("minDiagonalNeighborsPass2", fallback=2)
 
-    log.debug("PRA cleaning start: pass1(minDirect=%d), pass2(minDiag=%d), nFiles=%d",
-              p1_min, p2_min, len(selectedFiles))
+    log.info(
+        "Step 04: PRA cleaning start (pass1=%d, pass2=%d, nFiles=%d)",
+        p1_min, p2_min, len(selectedFiles)
+    )
 
     edgeKernel1 = np.array([[0, 1, 0],
                             [1, 0, 1],
@@ -55,51 +56,51 @@ def runPraCleaning(cfg, workFlowDir, demPath, selectedFiles):
 
     for inPath in selectedFiles:
         try:
-            log.debug("  cleaning: ./%s", rel(inPath))
+            relIn = relPath(inPath, cairosDir)
+            log.info("Cleaning PRA: ./%s", relIn)
             arr, _prof = dataUtils.readRaster(inPath, return_profile=True)
 
-            # binary mask (anything > 0 becomes 1)
             mask = (arr > 0).astype(np.uint8)
 
             # Pass 1: direct neighbors
-            n1 = convolve(mask, edgeKernel1, mode='constant', cval=0)
-            mask1 = mask.copy()
-            mask1[n1 < p1_min] = 0
+            with timeIt("Pass1 - direct neighbors"):
+                n1 = convolve(mask, edgeKernel1, mode="constant", cval=0)
+                mask1 = mask.copy()
+                mask1[n1 < p1_min] = 0
 
             base = os.path.splitext(os.path.basename(inPath))[0]
             out1 = os.path.join(outDir, f"{base}_BnCh1.tif")
-            dataUtils.saveRaster(demPath, out1, mask1, dtype='uint8', nodata=0, compress='DEFLATE')
-            log.debug("  saved: ./%s", rel(out1))
+            dataUtils.saveRaster(demPath, out1, mask1, dtype="uint8", nodata=0, compress="DEFLATE")
+            log.debug("Saved: ./%s", relPath(out1, cairosDir))
 
             # Pass 2: diagonal neighbors
-            n2 = convolve(mask1, edgeKernel2, mode='constant', cval=0)
-            mask2 = mask1.copy()
-            mask2[n2 < p2_min] = 0
+            with timeIt("Pass2 - diagonal neighbors"):
+                n2 = convolve(mask1, edgeKernel2, mode="constant", cval=0)
+                mask2 = mask1.copy()
+                mask2[n2 < p2_min] = 0
 
             out2 = os.path.join(outDir, f"{base}_BnCh2.tif")
-            dataUtils.saveRaster(demPath, out2, mask2, dtype='uint8', nodata=0, compress='DEFLATE')
-            log.debug("  saved: ./%s", rel(out2))
+            dataUtils.saveRaster(demPath, out2, mask2, dtype="uint8", nodata=0, compress="DEFLATE")
+            log.debug("Saved: ./%s", relPath(out2, cairosDir))
 
             cleaned_final.append(out2)
             n_clean += 1
 
         except Exception:
-            log.exception("Cleaning failed for ./%s", rel(inPath))
-            cleaned_final.append(inPath)  # fallback to original
+            log.exception("Step 04: Cleaning failed for ./%s", relPath(inPath, cairosDir))
+            cleaned_final.append(inPath)
             n_fallback += 1
 
-    log.debug("PRA cleaning done (final _BnCh2=%d, fallback=%d)", n_clean, n_fallback)
+    log.info("Step 04: PRA cleaning done (success=%d, fallback=%d)", n_clean, n_fallback)
     return cleaned_final
 
 
 # ------------------ Polygonization Helpers ------------------ #
 
-def rasterToPolygons(path, includeZero: bool = False):
+def rasterToPolygons(path, includeZero: bool = False) -> gpd.GeoDataFrame:
     """
-    Convert a (single-band) raster to polygons.
-    - Masks out nodata from the input raster.
-    - If includeZero=False, only values > 0 are polygonized (typical for masks).
-    Returns: GeoDataFrame with columns: ['value', 'geometry'] and CRS set.
+    Convert a raster to polygons (masking nodata).
+    Returns a GeoDataFrame with ['value', 'geometry'].
     """
     with rasterio.open(path) as src:
         arr = src.read(1)
@@ -126,135 +127,99 @@ def rasterToPolygons(path, includeZero: bool = False):
             geoms.append(shape(item["geometry"]))
             vals.append(item["properties"]["value"])
 
-    gdf = gpd.GeoDataFrame({"value": vals, "geometry": geoms}, crs=crs)
+    # Pylance doesn’t understand GeoPandas constructors -> ignore type
+    gdf = gpd.GeoDataFrame({"value": vals, "geometry": geoms}, crs=crs)  # type: ignore[arg-type]
     return gdf
 
 
-def calcPolygonProperties(gdf):
-    """
-    Add simple attributes to polygons:
-      - area_m (square meters)
-      - area_km (square kilometers)
-      - thickness (currently None placeholder)
-      - ID (1..N)
-    Returns the same GeoDataFrame with extra columns.
-    """
-    # vectorized area (assumes projected CRS in meters)
+def calcPolygonProperties(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Add area and ID fields to polygons."""
     gdf["area_m"] = gdf.geometry.area
-    gdf["area_km"] = gdf["area_m"] / 1e6
+    gdf["area_km"] = gdf["area_m"] / 1e6  # type: ignore[operator]
     gdf["thickness"] = None
     gdf["ID"] = range(1, len(gdf) + 1)
     return gdf
 
 
-
-
 # ------------------ Main Driver ------------------ #
 
 def runPraProcessing(cfg, workFlowDir):
-    """
-    Step 05: PRA processing.
-    Loads DEM as reference, selects PRA rasters from praSelectionDir
-    according to threshold in [praSELECTION], logs parameters, cleans masks.
-    """
+    """Step 04: Clean PRA rasters and polygonize results."""
     tAll = time.perf_counter()
 
-    # --- Directories ---
-    cairosDir       = workFlowDir['cairosDir']
-    praSelectionDir = workFlowDir['praSelectionDir']
-    inputDir        = workFlowDir['inputDir']
+    cairosDir       = workFlowDir["cairosDir"]
+    praSelectionDir = workFlowDir["praSelectionDir"]
+    inputDir        = workFlowDir["inputDir"]
 
-    # --- DEM path ---
-    demName = cfg['MAIN']['DEM']
+    demName = cfg["MAIN"]["DEM"]
     demPath = os.path.join(inputDir, demName)
 
-    # --- Load DEM as reference (profile + nodata) ---
+    # --- DEM reference ---
     dem, demProfile = dataUtils.readRaster(demPath, return_profile=True)
-    demNoData = demProfile.get('nodata', 0)
-    cellSize  = demProfile['transform'][0]
-    crsName   = demProfile['crs']
+    demNoData = demProfile.get("nodata", 0)
+    cellSize  = demProfile["transform"][0]
+    crsName   = demProfile["crs"]
 
-    # --- Threshold code ---
-    thrF  = cfg['praSELECTION'].getfloat('selectedThreshold', fallback=0.30)
-    code3 = f"{int(thrF * 100):03d}"  # 0.30 -> "030"
+    # --- Threshold ---
+    thrF  = cfg["praSELECTION"].getfloat("selectedThreshold", fallback=0.30)
+    code3 = f"{int(thrF * 100):03d}"
 
     # --- Select PRA rasters ---
     pattern = f"pra{code3}sec*.tif"
     selectedFiles = sorted(glob.glob(os.path.join(praSelectionDir, pattern)))
 
-    # --- Prepare relative paths for logging ---
-    rel = lambda p: os.path.relpath(p, start=cairosDir)
-    relDemPath = rel(demPath)
+    relDemPath = relPath(demPath, cairosDir)
+    log.info(
+        "Step 04: Using DEM=./%s, cellSize=%.2f, CRS=%s, NoData=%s",
+        relDemPath, cellSize, crsName, demNoData
+    )
+    log.info("Step 04: Threshold=%.2f (%s), nFiles=%d", thrF, code3, len(selectedFiles))
 
-    # --- Log parameters ---
-    log.info("...PRA processing using: DEM=./%s, cellSize=%.2f, CRS=%s, NoData=%s",
-             relDemPath, cellSize, crsName, demNoData)
-    log.info("...PRA processing using: threshold=%.2f (%s), nFiles=%d",
-             thrF, code3, len(selectedFiles))
-
-    # --- Log relative file paths for processing (INFO) ---
-    for f in selectedFiles:
-        log.debug("...PRA processing files found: ./%s", rel(f))
-
-    # --- Early exit if no files found ---
     if not selectedFiles:
-        log.error("No PRA rasters found for threshold %s in ./%s", code3, rel(praSelectionDir))
-        log.info("...PRA processing - failed (no matching rasters): %.2fs", time.perf_counter() - tAll)
+        log.error("No PRA rasters found for threshold %s in ./%s",
+                  code3, relPath(praSelectionDir, cairosDir))
+        log.error("Step 04 failed (no matching rasters)")
         return
 
-    # --- Read PRA rasters & check metadata ---
+    # --- Metadata consistency check ---
     for f in selectedFiles:
         arr, prof = dataUtils.readRaster(f, return_profile=True)
-        log.info("...PRA cleaning input: ./%s", rel(f))
+        relF = relPath(f, cairosDir)
+        if prof["crs"] != demProfile["crs"]:
+            log.warning("CRS mismatch for ./%s", relF)
+        if prof["transform"] != demProfile["transform"]:
+            log.warning("Transform mismatch for ./%s", relF)
+        if (prof["width"], prof["height"]) != (demProfile["width"], demProfile["height"]):
+            log.warning("Dimension mismatch for ./%s", relF)
+        if prof.get("nodata") != demProfile.get("nodata"):
+            log.warning("NoData mismatch for ./%s", relF)
+        if prof["dtype"] != "int16":
+            log.warning("Unexpected dtype for ./%s (expected int16, got %s)", relF, prof["dtype"])
 
-        # Consistency checks
-        if prof['crs'] != demProfile['crs']:
-            log.error("CRS mismatch for ./%s (DEM=%s, PRA=%s)", rel(f), demProfile['crs'], prof['crs'])
-        if prof['transform'] != demProfile['transform']:
-            log.error("Transform mismatch for ./%s", rel(f))
-        if (prof['width'], prof['height']) != (demProfile['width'], demProfile['height']):
-            log.error("Dimension mismatch for ./%s (DEM=%s, PRA=%s)",
-                      rel(f), (demProfile['width'], demProfile['height']),
-                      (prof['width'], prof['height']))
-        if prof.get('nodata') != demProfile.get('nodata'):
-            log.error("NoData mismatch for ./%s (DEM=%s, PRA=%s)",
-                      rel(f), demProfile.get('nodata'), prof.get('nodata'))
-        if prof['dtype'] != 'int16':
-            log.warning("Unexpected dtype for ./%s (expected int16, got %s)", rel(f), prof['dtype'])
+    # --- Cleaning ---
+    with timeIt("Step 04: PRA Cleaning"):
+        cleanedFiles = runPraCleaning(cfg, workFlowDir, demPath, selectedFiles)
 
-    # --- Cleaning (Pass1 + Pass2) ---
-    tClean = time.perf_counter()
-    cleanedFiles = runPraCleaning(cfg, workFlowDir, demPath, selectedFiles)
-    log.info("...PRA cleaning finished - done: %.2fs", time.perf_counter() - tClean)
+    # --- Polygonization to GeoJSON ---
+    with timeIt("Step 04: Polygonization"):
+        outDir = workFlowDir["praProcessingDir"]
+        os.makedirs(outDir, exist_ok=True)
+        n_ok, n_fail = 0, 0
 
+        for inPath in cleanedFiles:
+            try:
+                base = os.path.splitext(os.path.basename(inPath))[0]
+                geojsonPath = os.path.join(outDir, f"{base}.geojson")
 
-    # --- Polygonization ---
-        # --- Step 4: Polygonize cleaned rasters to Shapefiles ---
-    tPoly = time.perf_counter()
-    outDir = workFlowDir['praProcessingDir']
-    os.makedirs(outDir, exist_ok=True)
+                gdf = rasterToPolygons(inPath, includeZero=False)
+                gdf = calcPolygonProperties(cast(gpd.GeoDataFrame, gdf))
+                gdf.to_file(geojsonPath, driver="GeoJSON")  # type: ignore[attr-defined]
+                log.info("Polygonized → ./%s", relPath(geojsonPath, cairosDir))
+                n_ok += 1
+            except Exception:
+                log.exception("Polygonization failed for ./%s", relPath(inPath, cairosDir))
+                n_fail += 1
 
-    rel = lambda p: os.path.relpath(p, start=cairosDir)
-    n_ok, n_fail = 0, 0
+        log.info("Polygonization complete (ok=%d, fail=%d)", n_ok, n_fail)
 
-    for inPath in cleanedFiles:
-        try:
-            base = os.path.splitext(os.path.basename(inPath))[0]
-            shpPath = os.path.join(outDir, f"{base}.shp")
-
-            gdf = rasterToPolygons(inPath, includeZero=False)  # ignore zeros
-            gdf = calcPolygonProperties(gdf)
-
-            gdf.to_file(shpPath)
-            log.info("...PRA polygonized → ./%s", rel(shpPath))
-            n_ok += 1
-        except Exception:
-            log.exception("Polygonization failed for ./%s", rel(inPath))
-            n_fail += 1
-
-    log.info("...PRA polygonization - done: %.2fs", time.perf_counter() - tPoly)
-
-
-    
-
-
+    log.info("Step 04: PRA Processing complete in %.2fs", time.perf_counter() - tAll)

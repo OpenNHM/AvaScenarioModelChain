@@ -1,4 +1,11 @@
-# praMakeBigDataStructure.py
+# ------------------ Step 08: Make Big Data Structure ------------------ #
+# Purpose: Aggregate per-(band,size) PRA rasters and GeoJSONs into the FlowPy
+#          Big Data directory tree (SizeN/{dry,wet}/Inputs/{REL,RELID,RELJSON}).
+# Input :  ./08_praPrepForFlowPy/BnCh2_subC.../*.tif + *.geojson
+# Output:  ./09_flowPyBigDataStructure/BnCh2_subC.../praXXX-1800-2000-4/...
+# Config:  [praMAKEBIGDATASTRUCTURE]
+# Consumes: Step 07 outputs
+# Provides: FlowPy-ready structured input tree per PRA
 
 import os
 import re
@@ -9,7 +16,6 @@ import logging
 import contextlib
 from typing import Optional
 
-
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.ERROR)
 logging.getLogger("fiona").setLevel(logging.ERROR)
@@ -17,33 +23,38 @@ logging.getLogger("fiona").setLevel(logging.ERROR)
 # ------------------ Minimal helpers ------------------ #
 
 def relPath(path, cairosDir):
+    """Relative path helper for unified logging."""
     try:
         return os.path.relpath(path, start=cairosDir)
     except Exception:
         return path
 
+
 @contextlib.contextmanager
 def timeIt(label, level=logging.DEBUG):
+    """Context timer for consistent duration logs."""
     t0 = time.perf_counter()
     try:
         yield
     finally:
         log.log(level, "%s finished in %.2fs", label, time.perf_counter() - t0)
 
-def _subfolderName(streamThreshold, minLength, smoothingWindowSize, sizeFilter):
+
+def _subfolderName(streamThreshold, minLength, smoothingWindowSize, sizeFilter) -> str:
+    """Compose the standard Step-07 subfolder name."""
     return f"BnCh2_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
 
-def _discoverInputFolder(cfg, workFlowDir, usePraBoundary, streamThreshold, minLength, smoothingWindowSize, sizeFilter):
-    """
-    Return the Step-07 output folder that contains per-(band,size) files.
-    NOTE: Boundary rasters (-praBound) live in the SAME folder, only filenames differ.
-    """
+
+def _discoverInputFolder(cfg, workFlowDir, usePraBoundary, streamThreshold, minLength, smoothingWindowSize, sizeFilter) -> str:
+    """Locate Step-07 output folder containing per-(band,size) files."""
     cairosDir = workFlowDir["cairosDir"]
     praPrepForFlowPyDir = workFlowDir.get("praPrepForFlowPyDir") or os.path.join(cairosDir, "08_praPrepForFlowPy")
     subName = _subfolderName(streamThreshold, minLength, smoothingWindowSize, sizeFilter)
     return os.path.join(praPrepForFlowPyDir, subName)
 
+
 def _ensureOutputRoot(cfg, workFlowDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter, usePraBoundary):
+    """Ensure root output folder for BigData structure exists."""
     cairosDir = workFlowDir["cairosDir"]
     bigDataRoot = workFlowDir.get("praMakeBigDataStructureDir") or os.path.join(cairosDir, "09_flowPyBigDataStructure")
     os.makedirs(bigDataRoot, exist_ok=True)
@@ -54,21 +65,14 @@ def _ensureOutputRoot(cfg, workFlowDir, streamThreshold, minLength, smoothingWin
     os.makedirs(outCaseDir, exist_ok=True)
     return bigDataRoot, outCaseDir
 
+
 def _iterTifs(inputFolder):
+    """Recursively list all .tif files."""
     return sorted(glob.glob(os.path.join(inputFolder, "**", "*.tif"), recursive=True))
 
 
 def _extractSizeNumberFromBase(baseName: str) -> Optional[int]:
-    """
-    Extracts the size class number, which is always the token between
-    the 3rd and 4th '-' in filenames like:
-
-      pra030secN-0000-1800-2.geojson
-      pra030secN-2000-2200-5-praAreaM.tif
-      pra030secN-2200-2400-3-praID.tif
-
-    Returns int or None if not found.
-    """
+    """Extract size class number (4th token in praXXX-YYYY-ZZZZ-N filenames)."""
     parts = baseName.split("-")
     if len(parts) >= 4:
         try:
@@ -78,11 +82,10 @@ def _extractSizeNumberFromBase(baseName: str) -> Optional[int]:
     return None
 
 
-
 def _makeCaseTreeForRaster(outCaseDir, folderBase, maxSize, minSize=2):
     """
     Create:
-      outCaseDir/<folderBase>/SizeN/{wet,dry}/Inputs/{REL, RELID, RELJSON}
+      outCaseDir/<folderBase>/SizeN/{wet,dry}/Inputs/{REL,RELID,RELJSON}
     """
     caseRoot = os.path.join(outCaseDir, folderBase)
     os.makedirs(caseRoot, exist_ok=True)
@@ -97,7 +100,9 @@ def _makeCaseTreeForRaster(outCaseDir, folderBase, maxSize, minSize=2):
             log.debug("Created: %s, %s, %s", relDir, relIdDir, relJsonDir)
     return caseRoot
 
+
 def _logDirectoryTree(baseDir, cairosDir, level=logging.INFO):
+    """Optional full directory tree logger."""
     baseDir = os.path.abspath(baseDir)
     log.log(level, "Directory tree for ./%s", relPath(baseDir, cairosDir))
     for root, dirs, files in os.walk(baseDir):
@@ -107,6 +112,7 @@ def _logDirectoryTree(baseDir, cairosDir, level=logging.INFO):
         subIndent = "    " * (depth + 1)
         for f in sorted(files):
             log.log(level, "%s%s", subIndent, f)
+
 
 # ------------------ Main driver ------------------ #
 
@@ -135,9 +141,9 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
     cairosDir = workFlowDir["cairosDir"]
     inputFolder = _discoverInputFolder(cfg, workFlowDir, usePraBoundary,
                                        streamThreshold, minLength, smoothingWindowSize, sizeFilter)
-    outputRoot, outCaseDir = _ensureOutputRoot(cfg, workFlowDir,
-                                               streamThreshold, minLength, smoothingWindowSize, sizeFilter,
-                                               usePraBoundary)
+    _, outCaseDir = _ensureOutputRoot(cfg, workFlowDir,
+                                      streamThreshold, minLength, smoothingWindowSize, sizeFilter,
+                                      usePraBoundary)
 
     log.info("...MakeBigData using: in=./%s, out=./%s, streamThr=%s, minLen=%s, smoothWin=%s, sizeF=%s, usePraBoundary=%s",
              relPath(inputFolder, cairosDir), relPath(outCaseDir, cairosDir),
@@ -173,39 +179,33 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
         try:
             with timeIt(f"makeCase({os.path.basename(tifPath)})"):
                 fileStem = os.path.splitext(os.path.basename(tifPath))[0]
-                folderBase = fileStem
 
-                # strip legacy boundary suffixes
-                for suffix in ("-praID-praBound", "-praID", "-praBound"):
-                    if folderBase.endswith(suffix):
-                        folderBase = folderBase[:-len(suffix)]
+                # --- clean folderBase robustly (remove technical suffixes) ---
+                folderBase = re.sub(r'-ElevBands-Sized', '', fileStem)
+                folderBase = re.sub(r'-(pra(ID|AreaM|AreaSized|Bound)).*$', '', folderBase)
+                log.debug("Scenario folder base parsed: %s -> %s", fileStem, folderBase)
 
-                # strip attribute suffixes so all variants share the same folder
-                for suffix in ("-praAreaM", "-praAreaSized", "-ElevBands-Sized", "-praID"):
-                    if folderBase.endswith(suffix):
-                        folderBase = folderBase[: -len(suffix)]
-
-                # extract size number
+                # --- extract size number ---
                 sizeNum = _extractSizeNumberFromBase(folderBase)
                 if sizeNum is None:
                     nSkipped += 1
                     log.warning("Could not extract size number from '%s'; skipping.", fileStem)
                     continue
 
-                # ensure case root
+                # --- ensure case root ---
                 caseRoot = os.path.join(outCaseDir, folderBase)
                 os.makedirs(caseRoot, exist_ok=True)
 
+                # --- per-flowType + size subtrees ---
                 for flowType in ("dry", "wet"):
                     if flowType == "dry":
                         minSize = minDrySizeClass
                         maxSize = min(maxDrySizeClass, sizeNum)
-                    else:  # wet
+                    else:
                         minSize = minWetSizeClass
                         maxSize = min(maxWetSizeClass, sizeNum)
 
                     for size in range(minSize, maxSize + 1):
-                        # Create REL/RELID/RELJSON dirs
                         relDir     = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "REL")
                         relIdDir   = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELID")
                         relJsonDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELJSON")
@@ -214,7 +214,7 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                         os.makedirs(relJsonDir, exist_ok=True)
                         nFoldersCreated += 1
 
-                        # Copy PRA raster
+                        # --- Copy PRA raster ---
                         if fileStem.endswith("-praID") or "-praID" in fileStem:
                             dstPath = os.path.join(relIdDir, os.path.basename(tifPath))
                         else:
@@ -228,7 +228,7 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                         except Exception:
                             log.exception("Copy failed to ./%s", relPath(relDir, cairosDir))
 
-                        # Copy matching GeoJSON (if exists)
+                        # --- Copy matching GeoJSON (if exists) ---
                         geoBase = folderBase + ".geojson"
                         geojsonSearch = os.path.join(inputFolder, geoBase)
                         if os.path.exists(geojsonSearch):
@@ -245,6 +245,7 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
         except Exception:
             log.exception("Case creation failed for ./%s", relPath(tifPath, cairosDir))
 
+    # --- optional directory tree log ---
     if logDirectoryTree:
         _logDirectoryTree(outCaseDir, cairosDir)
 

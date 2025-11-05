@@ -1,21 +1,29 @@
-# cairos/in1Utils/dataUtils.py
+# ------------------ CAIROS Utility Module ------------------ #
+# File: cairos/in1Utils/dataUtils.py
+# Purpose: Common helpers for raster/vector I/O, timing, folders, and PRA prep.
+# Notes:
+# - Safe GeoPandas / pandas operations
+# - Unified logging + timing
+# - All raster I/O aligned with DEM metadata
+# ------------------------------------------------------------
 
 import os
 import pathlib
 import shutil
 import zipfile
 import logging
-from typing import Union, List, Tuple
-
-import rasterio
-import geopandas as gpd
-import numpy as np
-from rasterio.features import rasterize
-from rasterio.errors import RasterioIOError
 import subprocess
-
 import contextlib
 import time
+from typing import Union, List, Tuple
+
+import numpy as np
+import pandas as pd
+import rasterio
+from rasterio.features import rasterize
+from rasterio.errors import RasterioIOError
+import geopandas as gpd
+
 import in1Utils.cfgUtils as cfgUtils
 
 log = logging.getLogger(__name__)
@@ -41,7 +49,6 @@ def timeIt(label, level=logging.DEBUG):
         yield
     finally:
         log.log(level, "%s finished in %.2fs", label, time.perf_counter() - t0)
-
 
 
 # ----------------------------------------------------------------------
@@ -141,11 +148,7 @@ def makeOutputDir(mainPath: PathLike) -> pathlib.Path:
 
 
 def getFlowPyOutputPath(path: PathLike, variable: str, flowPyUid: str = "") -> List[pathlib.Path]:
-    """
-    Return list of FlowPy result rasters for a variable, robust to:
-      - Min/Max suffixes
-      - filename casing differences
-    """
+    """Return list of FlowPy result rasters for a variable."""
     token = str(variable).strip().lower()
     base = pathlib.Path(path) / "Outputs" / "com4FlowPy" / "peakFiles"
 
@@ -182,20 +185,12 @@ def filterAndWriteForFlowPy(
     sizeClassesToKeep=(2, 3, 4, 5),
     cfg=None
 ):
-    """
-    For each input GeoJSON, write per-(praElevBand, praAreaSized) filtered GeoJSONs.
-    Adds:
-      - aspect attribute (N/S/E/W from filename)
-      - deterministic 7-digit praID (2-digit group [10–99] + 5-digit feature counter [00001–99999])
-    Also writes praID_translation.csv in the output dir.
-    """
+    """Filter and split PRA GeoJSONs for FlowPy input generation."""
     import csv
 
     zeroFeatureFiles = {}
     nOk = nFail = totalPolys = 0
     translation_rows = []
-
-    # counters per group_id
     group_counters = {}
 
     for inPath in inFiles:
@@ -203,7 +198,6 @@ def filterAndWriteForFlowPy(
             with timeIt(f"prepFlowPy({os.path.basename(inPath)})"):
                 gdf = gpd.read_file(inPath)
 
-                # schema check
                 missing = [c for c in ("praElevBand", "praAreaSized") if c not in gdf.columns]
                 if missing:
                     log.warning("Missing attributes %s in ./%s; skipping.",
@@ -215,22 +209,26 @@ def filterAndWriteForFlowPy(
                 aspect = cfgUtils.extractAspect(inPath)
 
                 for bandLabel in elevBandLabels:
-                    gBand = gdf[gdf["praElevBand"] == bandLabel]
+                    gBand = gdf[gdf["praElevBand"] == bandLabel].copy()
 
                     for sizeClass in sizeClassesToKeep:
-                        gSel = gBand[gBand["praAreaSized"] == sizeClass].copy()
+                        # Safe filtering (string compare avoids dtype mismatch)
+                        gBand = gBand.copy()
+                        if "praAreaSized" in gBand.columns:
+                            gSel = gBand[gBand["praAreaSized"].astype(str) == str(sizeClass)].copy()
+                        else:
+                            log.warning("Missing column praAreaSized in %s", relPath(inPath, cairosDir))
+                            gSel = gpd.GeoDataFrame(columns=gBand.columns,
+                                                    geometry=gBand.geometry.name,
+                                                    crs=gBand.crs)
+
                         if len(gSel) == 0:
                             zeroFeatureFiles.setdefault(inPath, []).append(f"{bandLabel}-{sizeClass}")
                             continue
 
-                        # add aspect column
                         gSel["Sector"] = aspect
-
-                        # group ID (2-digit)
                         group_id = cfgUtils.hashGroup(bandLabel, sizeClass, aspect)
-
-                        if group_id not in group_counters:
-                            group_counters[group_id] = 0
+                        group_counters.setdefault(group_id, 0)
 
                         praIDs = []
                         for _ in range(len(gSel)):
@@ -239,12 +237,9 @@ def filterAndWriteForFlowPy(
                             praIDs.append(praID)
 
                         gSel["praID"] = praIDs
-
-                        # reorder columns → praID first
                         cols = ["praID"] + [c for c in gSel.columns if c != "praID"]
                         gSel = gSel[cols]
 
-                        # collect translation rows
                         for _, row in gSel.iterrows():
                             translation_rows.append({
                                 "praID": row["praID"],
@@ -253,17 +248,9 @@ def filterAndWriteForFlowPy(
                                 "Sector": row.get("Sector", "")
                             })
 
-                        # save GeoJSON
                         baseName = os.path.basename(inPath)
-                        newName = baseName
-                        if "ElevBands" in newName:
-                            newName = newName.replace("ElevBands", bandLabel)
-                        if "Sized" in newName:
-                            newName = newName.replace("Sized", f"{sizeClass}")
-                        if newName == baseName:  # fallback
-                            name, ext = os.path.splitext(baseName)
-                            newName = f"{name}-{bandLabel}-{sizeClass}{ext}"
-
+                        name, ext = os.path.splitext(baseName)
+                        newName = f"{name}-{bandLabel}-{sizeClass}{ext}"
                         outPath = os.path.join(outDir, newName)
                         gSel.to_file(outPath, driver="GeoJSON")
 
@@ -283,7 +270,6 @@ def filterAndWriteForFlowPy(
         log.info("Saved praID translation CSV: ./%s", relPath(csvPath, cairosDir))
 
     return nOk, nFail, totalPolys, zeroFeatureFiles
-
 
 
 # ----------------------------------------------------------------------
@@ -309,10 +295,7 @@ def folderToZip(folderPath: PathLike, zipName: str = "") -> pathlib.Path:
 
 
 def tifCompress(folder_path: PathLike, delete_original: bool = False) -> List[pathlib.Path]:
-    """
-    Compress all .tif/.tiff in folder (recursive) with LZW.
-    Returns list of compressed files.
-    """
+    """Compress all .tif/.tiff in folder (recursive) with LZW."""
     folder_path = pathlib.Path(folder_path)
     tif_files = [p for p in folder_path.rglob("*.tif*") if not p.name.lower().endswith("_lzw.tif")]
 
@@ -363,17 +346,11 @@ def deleteTempFolder(folder_path: PathLike) -> int:
 
 
 # ----------------------------------------------------------------------
-# No Data handling & rasterization helpers
+# NoData handling & rasterization helpers
 # ----------------------------------------------------------------------
 
 def enforceNumericNoData(rasterPath: pathlib.Path, fallback: float = -9999.0, force_epsg: int = 25832) -> None:
-    """
-    Ensure raster has:
-      - valid numeric NoData value (not None, NaN, or 0)
-      - CRS normalized to given EPSG (default 25832)
-
-    Only rewrites metadata/content if something is wrong.
-    """
+    """Ensure raster has numeric NoData and CRS normalized to EPSG code."""
     rasterPath = pathlib.Path(rasterPath)
     if not rasterPath.exists():
         raise FileNotFoundError(rasterPath)
@@ -385,40 +362,25 @@ def enforceNumericNoData(rasterPath: pathlib.Path, fallback: float = -9999.0, fo
             crs_epsg = src.crs.to_epsg() if src.crs else None
 
         changed = False
-
-        # --- NODATA check ---
-        if nodata is None or (isinstance(nodata, float) and np.isnan(nodata)):
-            log.warning("Raster %s: nodata missing/NaN. Resetting to %s.", rasterPath, fallback)
+        if nodata is None or (isinstance(nodata, float) and np.isnan(nodata)) or nodata == 0:
+            log.warning("Raster %s: invalid nodata (%s). Resetting to %s.",
+                        rasterPath, nodata, fallback)
             _rewriteWithNodata(rasterPath, fallback)
             changed = True
 
-        elif nodata == 0:
-            log.warning("Raster %s: nodata was 0 (invalid). Resetting to %s.", rasterPath, fallback)
-            _rewriteWithNodata(rasterPath, fallback)
-            changed = True
-
-        else:
-            log.debug("Raster %s: nodata already valid (%s).", rasterPath, nodata)
-
-        # --- CRS check ---
         if force_epsg and crs_epsg != force_epsg:
             log.warning("Raster %s: CRS %s ≠ EPSG:%s. Normalizing...",
                         rasterPath, crs_epsg, force_epsg)
-            try:
-                subprocess.run(
-                    ["gdal_edit.py", "-a_srs", f"EPSG:{force_epsg}", str(rasterPath)],
-                    check=False
-                )
-                changed = True
-            except Exception as e:
-                log.error("Failed to normalize CRS for %s: %s", rasterPath, e)
-        else:
-            log.debug("Raster %s: CRS already EPSG:%s", rasterPath, force_epsg)
+            subprocess.run(
+                ["gdal_edit.py", "-a_srs", f"EPSG:{force_epsg}", str(rasterPath)],
+                check=False
+            )
+            changed = True
 
         if changed:
             log.info("Raster %s normalized (nodata/CRS fixed).", rasterPath)
         else:
-            log.info("Raster %s already valid (nodata + CRS).", rasterPath)
+            log.debug("Raster %s already valid.", rasterPath)
 
     except RasterioIOError as e:
         log.error("Could not open raster: %s", e)
@@ -430,10 +392,8 @@ def _rewriteWithNodata(rasterPath: pathlib.Path, fallback: float) -> None:
     with rasterio.open(rasterPath) as src:
         arr = src.read(1)
         prof = src.profile.copy()
-
     arr = np.where(np.isnan(arr), fallback, arr).astype("float32")
     prof.update(nodata=fallback, dtype="float32")
-
     with rasterio.open(rasterPath, "w", **prof) as dst:
         dst.write(arr, 1)
     log.info("Rewritten %s with enforced nodata=%s", rasterPath, fallback)
@@ -448,14 +408,15 @@ def readBoundaryInDemCrs(boundPath: PathLike, demCrs):
 
 
 def prepareGdfForRasterize(gdf: gpd.GeoDataFrame, demCrs, boundaryGdfDEM: gpd.GeoDataFrame):
-    """
-    Reproject vector to DEM CRS and clip to boundary (if possible).
-    Returns a GeoDataFrame ready for rasterization.
-    """
+    """Reproject vector to DEM CRS and clip to boundary (if possible)."""
     if gdf.crs != demCrs:
         gdf = gdf.to_crs(demCrs)
     try:
-        gdf = gpd.clip(gdf, boundaryGdfDEM)
+        if boundaryGdfDEM is not None and not boundaryGdfDEM.empty:
+            gdf = gdf.copy()
+            gdf["geometry"] = gdf["geometry"].buffer(0)
+            boundaryGdfDEM["geometry"] = boundaryGdfDEM["geometry"].buffer(0)
+            gdf = gpd.clip(gdf, boundaryGdfDEM)
     except Exception as e:
         log.warning("Vector clip to boundary failed: %s. Proceeding un-clipped.", e)
     return gdf
@@ -463,21 +424,18 @@ def prepareGdfForRasterize(gdf: gpd.GeoDataFrame, demCrs, boundaryGdfDEM: gpd.Ge
 
 def selectRasterizeSpec(mode: str, gdf: gpd.GeoDataFrame,
                         attribute: str, classField: str):
-    """
-    Decide values for rasterization.
-    Always returns float32 dtype with nodata=-9999.0 to match FlowPy I/O.
-    """
+    """Decide values for rasterization, returns float32 dtype and nodata=-9999."""
     mode = (mode or "attribute").lower()
     if mode == "presence":
         vals = np.ones(len(gdf), dtype=np.float32)
     elif mode == "classid":
         if classField not in gdf.columns:
             raise KeyError(f"classId mode requires field '{classField}'")
-        vals = gdf[classField].fillna(0).astype(int).astype(np.float32).values
+        vals = pd.to_numeric(gdf[classField], errors="coerce").fillna(0).astype(np.float32).values
     else:  # attribute (default)
         if attribute not in gdf.columns:
             raise KeyError(f"attribute mode requires field '{attribute}'")
-        vals = gdf[attribute].fillna(0.0).astype(float).astype(np.float32).values
+        vals = pd.to_numeric(gdf[attribute], errors="coerce").fillna(0.0).astype(np.float32).values
 
     return "float32", -9999.0, vals
 
@@ -491,10 +449,7 @@ def rasterizeGeojsonToTif(gdf: gpd.GeoDataFrame,
                           classField: str,
                           allTouched: bool,
                           compress: bool):
-    """
-    Rasterize a vector to DEM grid and save to GeoTIFF.
-    Output is always float32 with nodata=-9999.0 and optional LZW compression.
-    """
+    """Rasterize vector to DEM grid and save to GeoTIFF."""
     _, demProfile = readRaster(demPath, return_profile=True)
     demCrs = demProfile["crs"]
     height = demProfile["height"]
@@ -508,14 +463,14 @@ def rasterizeGeojsonToTif(gdf: gpd.GeoDataFrame,
         arr = np.full((height, width), nodata, dtype=np.float32)
     else:
         shapes = list(zip(gdf.geometry, vals))
-    arr = rasterize(
-        shapes=shapes,
-        out_shape=(height, width),
-        transform=transform,
-        fill=float(nodata),  
-        all_touched=bool(allTouched),
-        dtype="float32"
-    )
+        arr = rasterize(
+            shapes=shapes,
+            out_shape=(height, width),
+            transform=transform,
+            fill=float(nodata) if np.isfinite(nodata) else -9999.0,
+            all_touched=bool(allTouched),
+            dtype="float32"
+        )
 
     saveRaster(demPath, outPath, arr, dtype="float32", nodata=-9999.0,
                compress=("LZW" if compress else None))
