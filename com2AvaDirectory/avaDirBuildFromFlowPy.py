@@ -46,60 +46,54 @@ logging.getLogger("pyogrio").setLevel(logging.WARNING)
 
 
 # ------------------ Entry Point ------------------ #
-def runAvaDirectoryBuildFromFlowPy(cfg, workFlowDir):
-    """Build full AvaDirectory structure from FlowPy outputs."""
+def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     log.info("Step 13: Start AvaDirectory build...")
 
     avaCfg = cfg["avaDIRECTORY"]
-
-    # --- Build FlowPy BigData and AvaDirectory paths dynamically ---
     caseFolder = workflowUtils.caseFolderName(cfg)
 
     workDir   = Path(cfg["MAIN"]["workDir"])
     project   = cfg["MAIN"]["project"]
     modelID   = cfg["MAIN"]["ID"]
 
-    # These two lines replicate the Jupyter configuration:
+    # --- Core directories ---
     baseDir = workDir / project / modelID / "09_flowPyBigDataStructure" / caseFolder
-    avaDir  = workDir / project / modelID / "11_avaDirectory"
-    cairosDir = Path(workFlowDir["cairosDir"])
+    avaDirData = Path(workFlowDir["avaDirDir"])  # 11_avaDirectoryData
+    avaDirLib  = Path(workFlowDir["avaDirTypeDir"])  # 12_avaDirectory
+    cairosDir  = Path(workFlowDir["cairosDir"])
 
     log.info("Step 13: Using baseDir=%s", relPath(baseDir, cairosDir))
-    log.info("Step 13: Using avaDir=%s", relPath(avaDir, cairosDir))
+    log.info("Step 13: Using avaDirData=%s", relPath(avaDirData, cairosDir))
+    log.info("Step 13: Using avaDirLib=%s", relPath(avaDirLib, cairosDir))
 
     if not baseDir.exists():
-        log.warning(
-            "Step 13: Expected FlowPy BigData directory does not exist → %s",
-            relPath(baseDir, cairosDir),
-        )
+        log.warning("Step 13: Expected FlowPy BigData directory does not exist: %s", relPath(baseDir, cairosDir))
         return
 
-    # --- Core behaviour flags ---
-    doProcess          = avaCfg.getboolean("doProcess", True)
-    doSplit            = avaCfg.getboolean("doSplit", True)
-    doMergeReljson     = avaCfg.getboolean("doMergeReljson", True)
-    doEnrich           = avaCfg.getboolean("doEnrich", True)
-    doExtractMetadata  = avaCfg.getboolean("doExtractMetadata", True)
-    doClipRasters      = avaCfg.getboolean("doClipRasters", True)
+    # --- Behaviour flags ---
+    doProcess = avaCfg.getboolean("doProcess", True)
+    doSplit = avaCfg.getboolean("doSplit", True)
+    doMergeReljson = avaCfg.getboolean("doMergeReljson", True)
+    doEnrich = avaCfg.getboolean("doEnrich", True)
+    doExtractMetadata = avaCfg.getboolean("doExtractMetadata", True)
+    doClipRasters = avaCfg.getboolean("doClipRasters", True)
     doCollectSingleAva = avaCfg.getboolean("doCollectSingleAva", True)
-    maxClipWorkers     = avaCfg.getint("maxClipWorkers", 4)
+    maxClipWorkers = avaCfg.getint("maxClipWorkers", 4)
 
-    # --- Identify PRA folders under the BigData case folder ---
     praDirs = sorted(baseDir.glob("pra*/"))
     praDirs = _filterSingleTestDirs(cfg, praDirs, "Step 13")
+
     if not praDirs:
-        log.warning("Step 13: No PRA directories found in %s", relPath(baseDir, cairosDir))
+        log.warning("Step 13: No PRA directories found.")
         return
     log.info("Step 13: Found %d PRA directories", len(praDirs))
 
-    # --- Process each PRA directly (no nested scenario folders) ---
     for praDir in praDirs:
         log.info("Step 13: Processing %s", relPath(praDir, cairosDir))
         for flowChoice in ["dry", "wet"]:
             pattern = os.path.join(praDir, f"Size*/{flowChoice}/Outputs/com4FlowPy")
             outputDirs = [p for p in glob.glob(pattern) if os.path.isdir(p)]
             if not outputDirs:
-                log.info("Step 13: No %s outputs in %s", flowChoice, relPath(praDir, cairosDir))
                 continue
 
             for outputsDir in outputDirs:
@@ -108,25 +102,17 @@ def runAvaDirectoryBuildFromFlowPy(cfg, workFlowDir):
                     gdf, targetDir, resId = processScenario(outputsDir, cairosDir)
                     if gdf is None:
                         continue
-
                 reljsonPath = _findRelJson(outputsDir)
                 if doSplit and gdf is not None:
                     splitGeojsonByPraId(
-                        gdf,
-                        targetDir,
-                        reljsonPath=reljsonPath,
-                        doMergeReljson=doMergeReljson,
-                        cairosDir=cairosDir,
+                        gdf, targetDir, reljsonPath, doMergeReljson, cairosDir
                     )
-
                     if doEnrich or doExtractMetadata:
-                        praFiles = glob.glob(os.path.join(targetDir, "praID*.geojson"))
-                        for pf in praFiles:
+                        for pf in glob.glob(os.path.join(targetDir, "praID*.geojson")):
                             if doEnrich:
                                 enrichAvalancheFeature(pf, resId=resId, cairosDir=cairosDir)
                             if doExtractMetadata:
                                 _attachScenarioMetadata(pf, cairosDir)
-
                     if doClipRasters:
                         clipRastersByMasks(
                             maskDir=targetDir,
@@ -136,9 +122,9 @@ def runAvaDirectoryBuildFromFlowPy(cfg, workFlowDir):
                             max_workers=maxClipWorkers,
                         )
 
-    # --- Collect all single-Ava results into AvaDirectory ---
+    # --- Collect to Library directory ---
     if doCollectSingleAva:
-        collectSingleAvaDirs(baseDir, avaDir, cairosDir)
+        collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir)
 
     log.info("Step 13: AvaDirectory build complete.")
 
@@ -368,11 +354,13 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
 
 
 # ------------------ Function: collectSingleAvaDirs ------------------ #
-def collectSingleAvaDirs(baseDir, avaDir, cairosDir):
-    """Collect all com4_* folders and merge attributes into avaDirectory.csv."""
+def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
+    """Collect com4_* folders and export avaDirectory.csv to Library folder."""
     lastName = os.path.basename(str(baseDir).rstrip("/"))
-    targetRoot = os.path.join(avaDir, lastName)
-    os.makedirs(targetRoot, exist_ok=True)
+    targetRoot = avaDirData / lastName
+    libRoot = avaDirLib / lastName
+    targetRoot.mkdir(parents=True, exist_ok=True)
+    libRoot.mkdir(parents=True, exist_ok=True)
     log.info("Collecting com4_* folders into %s", relPath(targetRoot, cairosDir))
 
     com4Folders = []
@@ -383,8 +371,8 @@ def collectSingleAvaDirs(baseDir, avaDir, cairosDir):
         com4Folders.extend(glob.glob(pattern))
 
     for src in com4Folders:
-        dst = os.path.join(targetRoot, os.path.basename(src))
-        if not os.path.exists(dst):
+        dst = targetRoot / os.path.basename(src)
+        if not dst.exists():
             try:
                 shutil.copytree(src, dst)
             except Exception:
@@ -392,8 +380,7 @@ def collectSingleAvaDirs(baseDir, avaDir, cairosDir):
 
     allRecords = []
     for com4Dir in sorted(glob.glob(os.path.join(targetRoot, "com4_*"))):
-        praFiles = glob.glob(os.path.join(com4Dir, "praID*.geojson"))
-        for pf in praFiles:
+        for pf in glob.glob(os.path.join(com4Dir, "praID*.geojson")):
             try:
                 gdf = _read_gdf(pf)
                 df = gdf.drop(columns="geometry", errors="ignore").copy()
@@ -404,12 +391,11 @@ def collectSingleAvaDirs(baseDir, avaDir, cairosDir):
 
     if allRecords:
         merged = pd.concat(allRecords, ignore_index=True)
-        csvPath = os.path.join(targetRoot, "avaDirectory.csv")
+        csvPath = libRoot / "avaDirectory.csv"
         merged.to_csv(csvPath, index=False)
         log.info("Merged %d rows into %s", len(merged), relPath(csvPath, cairosDir))
     else:
         log.warning("No praID*.geojson found to merge in %s", relPath(targetRoot, cairosDir))
-    return targetRoot
 
 
 # ------------------ Helper utilities ------------------ #
