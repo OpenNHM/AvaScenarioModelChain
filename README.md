@@ -21,26 +21,6 @@
 ---
 #
 #
-## Cairos/ Repository layout
-
-```text
-../Cairos/
-├── .git/                 # Git version control data (do not edit manually)
-├── .pixi/                # Local Pixi environments & virtual dependencies
-├── .virtual_documents/   # Temporary Jupyter virtual document links
-├── .vscode/              # VS Code project configuration (settings, tasks)
-├── __init__.py           # Marks this directory as a Python package (optional)
-├── cairosMapper/         # Scenario mapping, visualization, and post-processing tools
-├── cairosModelChain/     # Main CAIROS model chain — full automated workflow (Steps 00–15)
-├── docs/                 # Project documentation, specs, and design notes
-├── notebooks/            # Jupyter notebooks (experimental workflows, testing)
-├── pixi.lock             # Pixi environment lockfile (exact dependency versions)
-├── pyproject.toml        # Pixi + Python project manifest (dependencies, tasks)
-└── testData/             # Sample or test datasets for development and validation
-```
----
-#
-#
 ## Cairos/cairosModelChain Repository layout
 
 ```
@@ -90,23 +70,7 @@ Cairos/
     │   ├── plotFunctions.py     # Common plotting logic
     │   └── __pycache__/
     │
-    ├── helpBash/               # Bash-level helpers
-    │   └── printIni             # Quick print of current INI (for terminal debugging)
-    │
-    ├── helpPy/                 # Python-level diagnostic helpers
-    │   ├── showDir.py           # Pretty-print project folder tree
-    │   ├── tifDiff.py           # Compute raster difference between runs
-    │   └── __pycache__/
-    │
     └── __pycache__/
-│
-└── jupyterLaps/                # Jupyter Lab notebooks (manual & prototype workflows)
-    ├── 12-0_makeScenarioDirFromFlowPy.ipynb # Step 12 prototype – Scenario directory builder 
-    ├── 13-0_makeScenarioDir.ipynb           # Step 13 prototype – Scenario directory builder
-    ├── 14-5_makeScenarioMapsRobo.ipynb      # Step 14 automation – Avalanche Scenario Roboter
-    ├── WIN-14-5_makeScenarioMapsRobo.ipynb  # Windows-compatible variant
-    ├── 90-5_prepForest.ipynb                # Preprocessing – Forest raster generation
-    └── ...                                 # Other utility notebooks from CAIROS legacy
 
 ```
 ---
