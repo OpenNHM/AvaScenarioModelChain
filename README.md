@@ -1,5 +1,5 @@
-#
-# 🏔️ Avalanche Scenario Model Chain (2025-11 Update)
+
+## 🏔️ Avalanche Scenario Model Chain (2025-11 Update)
 
 <p align="center">
   <img src="https://media.giphy.com/media/3Xzlefv57zcrVIPPRN/giphy.gif" 
@@ -19,8 +19,8 @@
   - Integrates AvaFrame (FlowPy engine) in editable mode via Pixi
   - Manages directory trees, inputs, and processing configurations automatically
 ---
-#
-#
+
+
 ## Cairos/cairosModelChain Repository layout
 
 ```
@@ -74,8 +74,7 @@ Cairos/
 
 ```
 ---
-#
-#
+
 ## Quick start (Linux)
 
 #### 1. Minimal system prerequisites
@@ -176,8 +175,7 @@ cd ../AvaFrame/avaframe/com2FlowPy
 cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
 ```
 ---
-#
-#
+
 ## Running cairos ...
 
 - Fill in `local_cairosCfg.ini` → `[MAIN]` with your project info and input filenames (the files must exist in the run’s `00_input/` folder once the project is initialized).
@@ -298,8 +296,7 @@ singleTestDir = pra030secE-1800-2000-4
 ```
 - With this Step 09-15 will parameterize **that** leaf (`pra030secE-1800-2000-4`).
 ---
-#
-#
+
 ## What the workflow does (Steps 00–15)
 
 ### Step 00 — Initialize project folders
@@ -341,8 +338,7 @@ singleTestDir = pra030secE-1800-2000-4
   ```
 
 ---
-#
-#
+
 ### Steps 01–08 — PRA processing (`com1PRA`)
 
 - The PRA chain defines the complete pre-processing stage of CAIROS — from delineating potential release areas to creating structured, FlowPy-ready input datasets.
@@ -413,8 +409,7 @@ singleTestDir = pra030secE-1800-2000-4
 
 
 ---
-#
-#
+
 ## Steps 09–15 — FlowPy and AvaDirectory Chain
 
 ### Step 09 — Parameterization (per leaf)
@@ -552,16 +547,9 @@ FlowPy output, grouped per PRA and per size class.
 - Steps 09–15 form the complete FlowPy + AvaDirectory pipeline.
 - They parameterize, simulate, post-process, and structure all avalanche scenarios into reusable, indexed datasets — ready for mapping, visualization, and scenario-based analysis.
 ---
-#
-#
 ## INI
-
-
-
-
-
-#
-#
+- tbc...
+---
 ## thats it for now - tbc...
 
 
