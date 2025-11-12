@@ -70,7 +70,7 @@ def runAvaDirResults(cfg, workFlowDir):
     # --- Raster filename patterns ---
     typePatterns = {
         "inputPRA": "-area_m.tif",
-        "cellCounts": "__cellCounts_lzw.tif",
+        "cellCounts": "_cellCounts_lzw.tif",
         "zDelta": "_zdelta_lzw.tif",
         "zDelta_sized": "_zdelta_sized_lzw.tif",
         "travelLengthMax": "_travelLengthMax_lzw.tif",

@@ -1,0 +1,50 @@
+[project]
+name = "cairos"
+description = "The CAIROS Avalanche Model Chain workflow"
+# Restrict to versions supported by Pixi and GDAL/Fiona wheels
+requires-python = ">=3.9,<3.12"
+
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "shapely",
+    "ConfigUpdater",
+    "numba",
+    "whitebox",
+    "pyarrow",
+    "tqdm",
+]
+
+# ----------------------------------------------------------------------
+# Pixi configuration
+# ----------------------------------------------------------------------
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64", "win-64", "osx-64"]
+
+[tool.pixi.dependencies]
+python = "3.11.*"        # stable base for GDAL/Fiona/Rasterio
+proj = "9.5.*"
+gdal = "3.10.*"
+fiona = "1.10.*"
+rasterio = "1.4.*"
+pyproj = "3.7.*"
+pyarrow = "*"
+
+[tool.pixi.tasks]
+# Run CAIROS main workflow driver
+cairos = { cmd = "python runCairos.py", cwd = "cairosModelChain" }
+
+[tool.pixi.environments]
+dev = { features = ["dev"] }
+
+[tool.pixi.activation.env]
+NUMBA_CAPTURED_ERRORS = "new_style"
+CPL_LOG = "/dev/null"
+GDAL_PAM_ENABLED = "NO"
+GDAL_DISABLE_READDIR_ON_OPEN = "EMPTY_DIR"
+
+# ── Dev env uses your local AvaFrame (editable only, no PyPI fallback)
+[tool.pixi.feature.dev.pypi-dependencies]
+avaframe = { path = "../AvaFrame", editable = true }

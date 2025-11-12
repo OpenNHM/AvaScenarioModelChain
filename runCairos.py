@@ -1,5 +1,5 @@
-#
-# 
+
+
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 #    ███████  A V A L A N C H E · S C E N E N A R I O · M O D E L · C H A I N  ████████
 # ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -13,7 +13,6 @@
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 #    ███████  runCairos.py  ·  runCairos.py  ·  runCairos.py  ·  runCairos.py  ████████
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-
 
 
 
@@ -350,7 +349,7 @@ def runCairos(workDir: str = "") -> bool:
     # Step 13: Avalanche Directory Build from FlowPy
     # -------------------------------------------------------------------------
     t13 = time.perf_counter()
-    log.info("Step 13: Avalanche Directory Build from FlowPy -----------------------------")
+    log.info("Step 13: Avalanche Directory Build from FlowPy")
 
     if not workflowUtils.stepEnabled(workflowFlags, "avaDirBuildFromFlowPy", masterAvaDir):
         log.info("Step 13: ...AvaDirectory Build from FlowPy skipped (flag=False)")
@@ -370,7 +369,7 @@ def runCairos(workDir: str = "") -> bool:
     # Step 14: Avalanche Directory Type
     # -------------------------------------------------------------------------
     t14 = time.perf_counter()
-    log.info("Step 14: Avalanche Directory Type ------------------------------------------")
+    log.info("Step 14: Avalanche Directory Type")
 
     if not workflowUtils.stepEnabled(workflowFlags, "avaDirType", masterAvaDir):
         log.info("Step 14: ...AvaDirectory Type skipped (flag=False)")
@@ -390,7 +389,7 @@ def runCairos(workDir: str = "") -> bool:
     # Step 15: Avalanche Directory Results
     # -------------------------------------------------------------------------
     t15 = time.perf_counter()
-    log.info("Step 15: Avalanche Directory Results ---------------------------------------")
+    log.info("Step 15: Avalanche Directory Results")
 
     if not workflowUtils.stepEnabled(workflowFlags, "avaDirResults", masterAvaDir):
         log.info("Step 15: ...AvaDirectory Results skipped (flag=False)")

@@ -1,4 +1,3 @@
-
 #
 # 🏔️ Avalanche Scenario Model Chain (2025-11 Update)
 
