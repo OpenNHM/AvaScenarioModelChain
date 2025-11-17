@@ -33,23 +33,14 @@ local_*.ini
 Thumbs.db
 
 # --- Internal or heavy data ---
-testData/
-notebooks/
 _archiv/
-handoverDVT/
-data/
-examples/
+
 
 # --- Generated outputs (optional to exclude) ---
 *_output/
 *_results/
 *_plots/
 *_cache/
-Outputs/
-flowPyOutput/
-flowPyBigDataStructure/
-avaDirectory/
-avaScenMaps/
 
 # --- Documentation / assets ---
 *.pdf
