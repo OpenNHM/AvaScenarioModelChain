@@ -1,5 +1,5 @@
 
-## 🏔️ Avalanche Scenario Model Chain (2025-11 Update)
+## Avalanche Scenario Model Chain (2025-11 Update)
 
 <p align="center">
   <img src="https://media.giphy.com/media/3Xzlefv57zcrVIPPRN/giphy.gif" 
@@ -7,7 +7,7 @@
        width="300"/>
 </p>
 
-<h3 align="center">⚠️ Handle with care — work in progress</h3>
+<h4 align="center">⚠️ Handle with care — work in progress</h4>
 
 ### Overview
 - The Avalanche Scenario Model Chain is developed with in EUREGIO Project CAIROS
@@ -20,8 +20,7 @@
   - Manages directory trees, inputs, and processing configurations automatically
 ---
 
-
-## Cairos/cairosModelChain Repository layout
+## Repository layout
 
 ```
 Cairos/
