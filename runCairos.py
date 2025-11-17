@@ -1,8 +1,6 @@
 
 
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-#    ███████  A V A L A N C H E · S C E N E N A R I O · M O D E L · C H A I N  ████████
-# ───────────────────────────────────────────────────────────────────────────────────────────────
 #
 #    ██████╗  ██╗  ██╗ ██████╗     ████████╗  ██████╗ ███████╗ ███╗   ██╗
 #    ██╔══██╗ ██╗  ██║ ██╔══██╗    ╚██╔════╝ ██╔════╝ ██╔════╝ ████╗  ██║
@@ -11,9 +9,8 @@
 #    ██║  ██║ ╚███╔╝   ██║  ███╗██╗████████║ ╚██████╗ ███████╗ ██║ ╚████║ █████╗ ███╗██╗
 #    ╚═╝  ╚═╝  ╚══╝    ╚═╝  ╚══╝╚═╝╚═══════╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═══╝ ╚════╝ ╚══╝╚═╝
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-#    ███████  runCairos.py  ·  runCairos.py  ·  runCairos.py  ·  runCairos.py  ████████
+#    ███████  A V A L A N C H E · S C E N E N A R I O · M O D E L · C H A I N  ████████
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-
 
 
 # Purpose : Master orchestrator for the CAIROS Avalanche Model Chain (Steps 00–15)
@@ -50,10 +47,6 @@
 #     Complete automated execution of the CAIROS Avalanche Model Chain,
 #     generating PRA data, FlowPy simulations, and AvaDirectory results
 #     with unified logging, timing, and resumable workflow control.
-#
-# Execution:
-#     pixi run -e dev cairos
-#     or python runCairos.py
 #
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -212,10 +205,9 @@ def runCairos(workDir: str = "") -> bool:
     # Step 09–12: Avalanche intensity and runout modelling
     # ───────────────────────────────────────────────────────────────────────────────────────────
 
-    # -------------------------------------------------------------------------
+        # -------------------------------------------------------------------------
     # Step 09: Size dependent parametrization
     # -------------------------------------------------------------------------
-
     avaDirs: list[pathlib.Path] = []
     if workflowUtils.stepEnabled(workflowFlags, "flowPyInputToSize", masterFlowPy):
         t9 = time.perf_counter()
@@ -259,7 +251,7 @@ def runCairos(workDir: str = "") -> bool:
             log.exception("Step 09: Parameterization failed.")
             return False
     else:
-        log.info("Step 09: Skipped (flag=False)")
+        log.info("Step 09: ...Size dependent parameterization skipped (flag is False)")
 
 
     # -------------------------------------------------------------------------
@@ -267,7 +259,7 @@ def runCairos(workDir: str = "") -> bool:
     # -------------------------------------------------------------------------
     if workflowUtils.stepEnabled(workflowFlags, "flowPyRun", masterFlowPy):
         t10 = time.perf_counter()
-        log.info("Step 10: FlowPy run -----------------------------------------------------")
+        log.info("Step 10: Start FlowPy run...")
         try:
             # Discover and filter FlowPy leaves
             avaDirs = workflowUtils.discoverAndFilterAvaDirs(cfg, workFlowDir, "Step 10")
@@ -281,24 +273,19 @@ def runCairos(workDir: str = "") -> bool:
             delOG      = workflowUtils.stepEnabled(workflowFlags, "flowPyDOutputDeleteOGFiles", masterFlowPy)
             delTemp    = workflowUtils.stepEnabled(workflowFlags, "flowPyDeleteTempFolder",     masterFlowPy)
 
-            # -----------------------------------------------------------------
-            # Loop over each FlowPy directory
-            # -----------------------------------------------------------------
+            # Loop over FlowPy directories
             for avaDir in avaDirs:
                 relLeaf = os.path.relpath(avaDir, workFlowDir["cairosDir"])
                 log.info("Step 10: Running FlowPy for ./%s...", relLeaf)
                 t_leaf = time.perf_counter()
 
-                # --- Run FlowPy safely while preserving CAIROS logging setup ---
                 with workflowUtils.preserveLoggingForFlowPy():
                     runCom4FlowPy.main(avalancheDir=str(avaDir))
 
-                log.info(
-                    "Step 10: FlowPy run finished for ./%s in %.2fs",
-                    relLeaf, time.perf_counter() - t_leaf,
-                )
+                log.info("Step 10: FlowPy run finished for ./%s in %.2fs",
+                         relLeaf, time.perf_counter() - t_leaf)
 
-                # --- Step 11: Optional back-map FlowPy results to size ---
+                # Step 11: Optional back-map
                 if doSize:
                     try:
                         log.info("Step 11: Back-map FlowPy output to size for ./%s", relLeaf)
@@ -307,7 +294,7 @@ def runCairos(workDir: str = "") -> bool:
                         log.exception("Step 11: Results → size failed for ./%s", relLeaf)
                         return False
 
-                # --- Step 12: Optional compression and cleanup ---
+                # Step 12: Compression / cleanup
                 if doCompress:
                     try:
                         outDir = pathlib.Path(avaDir) / "Outputs"
@@ -325,20 +312,14 @@ def runCairos(workDir: str = "") -> bool:
                         log.exception("Step 12: Delete temp data failed for ./%s", relLeaf)
                         return False
 
-            # -----------------------------------------------------------------
-            # Step summary
-            # -----------------------------------------------------------------
             stepStats["Step 10"] = time.perf_counter() - t10
-            log.info("Step 10–12: FlowPy + postprocessing completed in %.2fs",
-                     stepStats["Step 10"])
+            log.info("Step 10–12: FlowPy + postprocessing completed in %.2fs", stepStats["Step 10"])
 
         except Exception:
             log.exception("Step 10–12: FlowPy processing failed.")
             return False
-
     else:
-        log.info("Step 10: FlowPy run skipped (flag=False)")
-
+        log.info("Step 10: ...FlowPy run skipped (flag is False)")
 
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -349,60 +330,53 @@ def runCairos(workDir: str = "") -> bool:
     # Step 13: Avalanche Directory Build from FlowPy
     # -------------------------------------------------------------------------
     t13 = time.perf_counter()
-    log.info("Step 13: Avalanche Directory Build from FlowPy")
-
     if not workflowUtils.stepEnabled(workflowFlags, "avaDirBuildFromFlowPy", masterAvaDir):
-        log.info("Step 13: ...AvaDirectory Build from FlowPy skipped (flag=False)")
+        log.info("Step 13: ...Avalanche Directory Build from FlowPy skipped (flag is False)")
     else:
+        log.info("Step 13: Start Avalanche Directory Build from FlowPy...")
         try:
             avaDirBuildFromFlowPy.runAvaDirBuildFromFlowPy(cfg, workFlowDir)
             stepStats["Step 13"] = time.perf_counter() - t13
-            log.info(
-                "Step 13: AvaDirectory Build from FlowPy finished successfully in %.2fs",
-                stepStats["Step 13"],
-            )
+            log.info("Step 13: Avalanche Directory Build from FlowPy finished successfully in %.2fs",
+                     stepStats["Step 13"])
         except Exception:
-            log.exception("Step 13: AvaDirectory Build from FlowPy failed.")
+            log.exception("Step 13: Avalanche Directory Build from FlowPy failed.")
             return False
+
 
     # -------------------------------------------------------------------------
     # Step 14: Avalanche Directory Type
     # -------------------------------------------------------------------------
     t14 = time.perf_counter()
-    log.info("Step 14: Avalanche Directory Type")
-
     if not workflowUtils.stepEnabled(workflowFlags, "avaDirType", masterAvaDir):
-        log.info("Step 14: ...AvaDirectory Type skipped (flag=False)")
+        log.info("Step 14: ...Avalanche Directory Type skipped (flag is False)")
     else:
+        log.info("Step 14: Start Avalanche Directory Type...")
         try:
             avaDirType.runAvaDirType(cfg, workFlowDir)
             stepStats["Step 14"] = time.perf_counter() - t14
-            log.info(
-                "Step 14: AvaDirectory Type finished successfully in %.2fs",
-                stepStats["Step 14"],
-            )
+            log.info("Step 14: Avalanche Directory Type finished successfully in %.2fs",
+                     stepStats["Step 14"])
         except Exception:
             log.exception("Step 14: Avalanche Directory Type failed.")
             return False
+
 
     # -------------------------------------------------------------------------
     # Step 15: Avalanche Directory Results
     # -------------------------------------------------------------------------
     t15 = time.perf_counter()
-    log.info("Step 15: Avalanche Directory Results")
-
     if not workflowUtils.stepEnabled(workflowFlags, "avaDirResults", masterAvaDir):
-        log.info("Step 15: ...AvaDirectory Results skipped (flag=False)")
+        log.info("Step 15: ...Avalanche Directory Results skipped (flag is False)")
     else:
+        log.info("Step 15: Start Avalanche Directory Results Build...")
         try:
             avaDirResults.runAvaDirResults(cfg, workFlowDir)
             stepStats["Step 15"] = time.perf_counter() - t15
-            log.info(
-                "Step 15: Avalanche Directory Results Build finished successfully in %.2fs",
-                stepStats["Step 15"],
-            )
+            log.info("Step 15: Avalanche Directory Results finished successfully in %.2fs",
+                     stepStats["Step 15"])
         except Exception:
-            log.exception("Step 15: AvaDirectory Results failed.")
+            log.exception("Step 15: Avalanche Directory Results failed.")
             return False
 
     # ─────────────────────────────────────────────────────────────────────────
