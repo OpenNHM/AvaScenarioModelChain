@@ -1,9 +1,11 @@
 [project]
-name = "cairos"
-description = "The CAIROS Avalanche Model Chain workflow"
-# Restrict to versions supported by Pixi and GDAL/Fiona wheels
+name = "avalanche-model-chain"
+description = "Avalanche Model Chain workflow (Preprocessing and PRA/Avalanche simulation pipeline)"
 requires-python = ">=3.9,<3.12"
 
+# ----------------------------------------------------------------------
+# Core Python dependencies
+# ----------------------------------------------------------------------
 dependencies = [
     "numpy",
     "matplotlib",
@@ -16,35 +18,50 @@ dependencies = [
 ]
 
 # ----------------------------------------------------------------------
-# Pixi configuration
+# Pixi PROJECT configuration
 # ----------------------------------------------------------------------
-
-[tool.pixi.workspace]
-channels = ["https://prefix.dev/conda-forge"]
+[tool.pixi]
+channels  = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64"]
 
+# ----------------------------------------------------------------------
+# GDAL/Fiona/Rasterio/PROJ stack
+# ----------------------------------------------------------------------
 [tool.pixi.dependencies]
-python = "3.11.*"        # stable base for GDAL/Fiona/Rasterio
-proj = "9.5.*"
-gdal = "3.10.*"
-fiona = "1.10.*"
+python   = "3.11.*"
+proj     = "9.5.*"
+gdal     = "3.10.*"
+fiona    = "1.10.*"
 rasterio = "1.4.*"
-pyproj = "3.7.*"
-pyarrow = "*"
+pyproj   = "3.7.*"
+pyarrow  = "*"
 
+# ----------------------------------------------------------------------
+# Task entrypoint
+# ----------------------------------------------------------------------
 [tool.pixi.tasks]
-# Run CAIROS main workflow driver
-cairos = { cmd = "python runCairos.py", cwd = "cairosModelChain" }
+modelchain = { cmd = "python runCairos.py", cwd = "." }
 
+# ----------------------------------------------------------------------
+# Environments
+# ----------------------------------------------------------------------
 [tool.pixi.environments]
 dev = { features = ["dev"] }
 
+# ----------------------------------------------------------------------
+# Environment variables for GDAL/Numba
+# ----------------------------------------------------------------------
 [tool.pixi.activation.env]
-NUMBA_CAPTURED_ERRORS = "new_style"
-CPL_LOG = "/dev/null"
-GDAL_PAM_ENABLED = "NO"
+NUMBA_CAPTURED_ERRORS        = "new_style"
+CPL_LOG                      = "/dev/null"
+GDAL_PAM_ENABLED             = "NO"
 GDAL_DISABLE_READDIR_ON_OPEN = "EMPTY_DIR"
 
-# ── Dev env uses your local AvaFrame (editable only, no PyPI fallback)
+# ----------------------------------------------------------------------
+# LOCAL AvaFrame REQUIRED for this workflow
+# This points to:
+#   <repo_root>/../AvaFrame
+# which works for Bitbucket dev AND GitHub clones.
+# ----------------------------------------------------------------------
 [tool.pixi.feature.dev.pypi-dependencies]
 avaframe = { path = "../AvaFrame", editable = true }
