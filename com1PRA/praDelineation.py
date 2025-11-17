@@ -1,10 +1,37 @@
 # ------------------ Step 01: PRA Delineation ------------------ #
 # Purpose: Generate PRA raster field from DEM and forest layers.
-# Inputs:  [MAIN] DEM, FOREST
+# Inputs : [MAIN] DEM, FOREST
 # Outputs: pra.tif, slope.tif, aspect.tif, ruggC.tif, windshelter.tif, forestC.tif
-# Config:  [praDELINEATION]
+# Config : [praDELINEATION]
 # Consumes: none
 # Provides: input to praSelection and praProcessing
+#
+# Method reference:
+#  - Veitinger, J., Purves, R. S., & Sovilla, B. (2016):
+#    Multi-scale fuzzy-logic identification of potential slab-avalanche release areas.
+#    NHESS 16(10), 2211–2225. https://doi.org/10.5194/nhess-16-2211-2016
+#
+#  - Schumacher, J. et al. (2022):
+#    Use of forest attribute maps for automated ATES modelling.
+#    Scand. J. Forest Res. 37(4), 264–275. https://doi.org/10.1080/02827581.2022.2096921
+#
+# Implementation: Fuzzy-logic terrain indicators (slope, ruggedness, wind shelter,
+#                 forest attenuation) combined into a continuous PRA field.
+
+
+import os
+import time
+import logging
+
+import numpy as np
+import rasterio
+from osgeo import gdal
+from numba import njit, prange
+
+import in1Utils.dataUtils as dataUtils
+from in1Utils.dataUtils import timeIt
+
+log = logging.getLogger(__name__)
 
 import os
 import time
