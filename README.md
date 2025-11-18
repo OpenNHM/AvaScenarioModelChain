@@ -13,18 +13,15 @@
 - The Avalanche Scenario Model Chain is developed with in EUREGIO Project CAIROS
 - The Avalanche Scenario Model Chain steps are the preprocessing for the Avalanche Scenario Mapper
 - The Avalanche Scenario Model Chain is a orchestrates the full automated avalanche modelling workflow — from raw terrain data to structured delineation of potential release areas (PRAs) and size dependent avalanche simulations.
-
-  - Main entrypoint: cairosModelChain/runCairos.py
-  - Orchestrates 15 workflow steps (Step 00–15)
-  - Integrates AvaFrame (FlowPy engine) in editable mode via Pixi
-  - Manages directory trees, inputs, and processing configurations automatically
+- The Model Chain (Steps 00–15) produces the AvaDirectoryResults dataset used by Step 16 (AvaScenarioMapper).
+- It runs with its **own Pixi environment**, independent of the Mapper environment.
 ---
 
 ## Repository layout
 
-```
-Cairos/
-└── cairosModelChain/           # Main Python package (modular CAIROS workflow)
+```text
+openNHM/
+└── AvaScenarioModelChain/           # Main Python package (modular CAIROS workflow)
     │
     ├── cairosCfg.ini           # Default configuration (global)
     ├── local_cairosCfg.ini     # Local project override (preferred for runs)
@@ -78,7 +75,7 @@ Cairos/
 
 #### 1. Minimal system prerequisites
 * Install only the flexible, OS-level tools system-wide.
-* All project dependencies (AvaFrame, CAIROS, GDAL, NumPy, etc.) will live inside Pixi-managed environments.
+* All python dependencies (AvaFrame, CAIROS, GDAL, NumPy, etc.) are installed exclusively inside the Pixi environment defined in this repository.
 * System Python (python3.10 or 3.11 on Ubuntu) is kept minimal — used only for tools like VS Code, Pixi bootstrap, etc.
 * CAIROS and AvaFrame never touch system Python → they live in isolated .pixi/envs/* environments.
 * Optional:
@@ -124,7 +121,7 @@ pixi shell
 python setup.py build_ext --inplace
 # checkout branch until next release (ATM)
 git checkout PS_FP_outputRelInfo
-pixi shell --environment dev
+pixi shell -e dev
 cd AvaFrame/avaframe
 python runCom4FlowPy.py
 ```
@@ -135,8 +132,8 @@ python runCom4FlowPy.py
 ```bash
 # choose your workspace directory next to AvaFrame
 cd ~/Documents/Applications
-git clone <your-cairos-repo> Cairos    # !!!!!!
-cd Cairos
+git clone https://github.com/OpenNHM/AvaScenarioModelChain.git
+cd AvaScenarioModelChain
 ```
 ### 4) Setup CAIROS ModelChain env
 
@@ -161,8 +158,8 @@ python -c "import avaframe, pathlib; print(pathlib.Path(avaframe.__file__).resol
 Copy the defaults and edit the **local** copies:
 
 ```bash
-# CAIROS ModelChain config
-cd Cairos/cairosModelChain
+# ModelChain config
+cd AvaScenarioModelChain
 cp cairosCfg.ini local_cairosCfg.ini
 
 # AvaFrame config
