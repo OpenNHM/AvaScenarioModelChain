@@ -1,4 +1,6 @@
-# compParams.py
+# AvaScenarioModelChain/in2Parameter/compParams.py
+# Author: Paula Spannring (BFW)
+# Modified: Christoph Hesselbach (BFW)
 
 import pathlib
 import os

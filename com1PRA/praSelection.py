@@ -1,10 +1,47 @@
-# ------------------ Step 02: PRA Selection ------------------ #
-# Purpose: Filter PRA raster by threshold, elevation, and aspect.
-# Inputs:  pra.tif, aspect.tif, DEM
-# Outputs: praXXXsecX.tif per selected aspect sector
-# Config:  [praSELECTION]
-# Consumes: outputs from Step 01 (praDelineation)
-# Provides: filtered PRAs for subsequent steps
+# ------------------ Step 02: PRA Selection ----------------------------- #
+#
+# Purpose :
+#     Filter the continuous PRA raster field generated in Step 01 using
+#     configurable thresholds, elevation limits, and directional (aspect)
+#     sectors. This step produces binary PRA masks representing potential
+#     release areas that satisfy the selected criteria.
+#
+# Inputs :
+#     - pra.tif        (PRA probability field from Step 01)
+#     - aspect.tif     (Aspect raster from Step 01)
+#     - DEM            (from [MAIN], used for elevation filtering)
+#
+# Outputs :
+#     - Aspect-sector-filtered PRA rasters:
+#         pra<aspectSector>sec<minElev>-<maxElev>.tif
+#       (naming pattern may vary depending on configuration)
+#
+# Config :
+#     [praSELECTION]
+#         • selectedThreshold   PRA probability cutoff
+#         • minElev, maxElev    elevation limits
+#         • aspectSector        directional constraint (e.g. N, E, SW, all)
+#         • maskCommRegion      optional masking by commission region
+#
+# Consumes :
+#     - Outputs from Step 01 (PRA delineation)
+#
+# Provides :
+#     - Filtered PRA masks required for:
+#         • Step 03 (Subcatchments)
+#         • Step 04 (PRA Processing)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
 
 import os
 import glob

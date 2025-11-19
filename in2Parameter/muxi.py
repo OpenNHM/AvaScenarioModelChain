@@ -1,5 +1,7 @@
-import numpy as np
+# AvaScenarioModelChain/in2Parameter/muxi.py
+# Author: Paula Spannring (BFW)
 
+import numpy as np
 
 def testXiMu(alpha, umax, h = 2., theta = 35.):
     '''

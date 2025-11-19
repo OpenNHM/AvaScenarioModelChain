@@ -1,22 +1,61 @@
-# ------------------ Step 01: PRA Delineation ------------------ #
-# Purpose: Generate PRA raster field from DEM and forest layers.
-# Inputs : [MAIN] DEM, FOREST
-# Outputs: pra.tif, slope.tif, aspect.tif, ruggC.tif, windshelter.tif, forestC.tif
-# Config : [praDELINEATION]
-# Consumes: none
-# Provides: input to praSelection and praProcessing
+# ------------------ Step 01: PRA Delineation --------------------------- #
 #
-# Method reference:
-#  - Veitinger, J., Purves, R. S., & Sovilla, B. (2016):
-#    Multi-scale fuzzy-logic identification of potential slab-avalanche release areas.
-#    NHESS 16(10), 2211–2225. https://doi.org/10.5194/nhess-16-2211-2016
+# Purpose :
+#     Generate a continuous PRA (Potential Release Area) raster field from DEM and
+#     forest layers using fuzzy-logic terrain indicators. These indicators quantify
+#     slope, ruggedness, wind shelter, and forest attenuation effects.
 #
-#  - Schumacher, J. et al. (2022):
-#    Use of forest attribute maps for automated ATES modelling.
-#    Scand. J. Forest Res. 37(4), 264–275. https://doi.org/10.1080/02827581.2022.2096921
+# Inputs :
+#     - DEM (from [MAIN])
+#     - FOREST (from [MAIN])
 #
-# Implementation: Fuzzy-logic terrain indicators (slope, ruggedness, wind shelter,
-#                 forest attenuation) combined into a continuous PRA field.
+# Outputs :
+#     - pra.tif              PRA probability field
+#     - slope.tif            Slope (deg)
+#     - aspect.tif           Aspect (deg)
+#     - ruggC.tif            Terrain ruggedness
+#     - windshelter.tif      Wind shelter index
+#     - forestC.tif          Forest cover attenuation index
+#
+# Config :
+#     [praDELINEATION]       Fuzzy-logic thresholds, radius, wind parameters
+#
+# Consumes :
+#     - None
+#
+# Provides :
+#     - PRA base layers for Step 02 (PRA Selection) and Step 05 (PRA Processing)
+#
+# Method Reference :
+#     Veitinger, J., Purves, R. S., & Sovilla, B. (2016):
+#       Multi-scale fuzzy-logic identification of potential slab-avalanche
+#       release areas. NHESS 16(10), 2211–2225.
+#       https://doi.org/10.5194/nhess-16-2211-2016
+#
+#     Schumacher, J. et al. (2022):
+#       Use of forest attribute maps for automated ATES modelling.
+#       Scandinavian Journal of Forest Research, 37(4), 264–275.
+#       https://doi.org/10.1080/02827581.2022.2096921
+#
+# Implementation :
+#     Multi-indicator fuzzy logic approach combining:
+#         • slope suitability
+#         • forest attenuation
+#         • terrain ruggedness
+#         • wind shelter effect
+#     to construct a continuous PRA likelihood field.
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
 
 
 import os

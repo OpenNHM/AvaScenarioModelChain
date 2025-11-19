@@ -1,12 +1,49 @@
 # ------------------ Step 06: PRA Assign Elevation & Size ------------------ #
-# Purpose: Add elevation, size, and administrative region metadata
-#          to segmented PRA polygons from Step 05.
-# Inputs:  Filtered PRA GeoJSONs (Step 05) + DEM + Commission / Region polygons
-# Outputs: GeoJSONs with elevation statistics, elevation bands,
-#          and final size-classed + region-tagged PRA features.
-# Config:  [praASSIGNELEV], [praSEGMENTATION], [praSUBCATCHMENTS], [MAIN]
-# Consumes: Filtered PRA GeoJSONs (size-filtered)
-# Provides: Elevation- and size-classed PRA GeoJSONs for FlowPy preparation (Step 07)
+#
+# Purpose :
+#     Assign elevation statistics, elevation bands, size classes, and
+#     administrative region metadata to PRA polygons produced in Step 05.
+#     This enriches each segmented PRA with all required attributes for
+#     FlowPy preparation and scenario parameterization.
+#
+# Inputs :
+#     - Segmented and size-filtered PRA GeoJSONs (from Step 05)
+#     - DEM raster (for elevation statistics)
+#     - Commission / region polygons (administrative overlays)
+#
+# Outputs :
+#     - Enriched PRA GeoJSONs containing:
+#         • min / max / mean elevation
+#         • elevation band classification
+#         • size class (via user-defined thresholds)
+#         • administrative region assignment
+#
+# Config :
+#     [praASSIGNELEV]      Elevation band definitions
+#     [praSEGMENTATION]    Size class thresholds and filters
+#     [praSUBCATCHMENTS]   Optional subcatchment metadata
+#     [MAIN]               DEM / region datasets
+#
+# Consumes :
+#     - Size-filtered PRA GeoJSONs from Step 05
+#
+# Provides :
+#     - Elevation- and size-classed PRA datasets required for:
+#         • Step 07 (PRA → FlowPy preparation)
+#         • FlowPy parameterization and scenario creation
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import glob

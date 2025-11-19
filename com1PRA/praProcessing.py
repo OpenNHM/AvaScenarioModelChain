@@ -1,10 +1,47 @@
-# ------------------ Step 04: PRA Processing ------------------ #
-# Purpose: Clean PRA masks (binary connectivity) and polygonize results.
-# Inputs:  PRA rasters from Step 02 (praSelectionDir), DEM
-# Outputs: Cleaned PRA rasters (_BnCh1, _BnCh2) + GeoJSON polygons
-# Config:  [praPROCESSING]
-# Consumes: PRA masks from Step 02
-# Provides: PRA polygons for later segmentation
+# ------------------ Step 04: PRA Processing ---------------------------- #
+#
+# Purpose :
+#     Perform binary cleaning and connectivity-based filtering on PRA masks
+#     generated in Step 02, followed by polygonization of the resulting
+#     contiguous PRA regions. This step transforms preliminary PRA rasters
+#     into clean, topologically valid PRA polygons.
+#
+# Inputs :
+#     - PRA rasters from Step 02 (praSelectionDir)
+#     - DEM (from [MAIN]) for optional elevation-based masking
+#
+# Outputs :
+#     - Cleaned PRA rasters:
+#         * <name>_BnCh1.tif   (pass 1: direct-neighbor connectivity)
+#         * <name>_BnCh2.tif   (pass 2: diagonal-neighbor refinement)
+#     - PRA GeoJSON polygons representing the cleaned regions
+#
+# Config :
+#     [praPROCESSING]
+#         • Connectivity thresholds (pass 1 / pass 2)
+#         • Mask behavior and nodata handling
+#         • Output compression settings
+#
+# Consumes :
+#     - PRA masks produced in Step 02
+#
+# Provides :
+#     - Cleaned PRA polygon datasets required for:
+#         • Step 05 (PRA Segmentation)
+#         • subsequent elevation/size assignment (Step 06)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import glob

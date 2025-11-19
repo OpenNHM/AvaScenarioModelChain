@@ -1,11 +1,4 @@
-# ------------------ CAIROS Utility Module ------------------ #
-# File: cairos/in1Utils/dataUtils.py
-# Purpose: Common helpers for raster/vector I/O, timing, folders, and PRA prep.
-# Notes:
-# - Safe GeoPandas / pandas operations
-# - Unified logging + timing
-# - All raster I/O aligned with DEM metadata
-# ------------------------------------------------------------
+# AvaScenarioModelChain/in1Utils/dataUtils.py
 
 import os
 import pathlib

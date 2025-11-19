@@ -3,67 +3,68 @@
 
 <p align="center">
   <img src="https://media.giphy.com/media/3Xzlefv57zcrVIPPRN/giphy.gif" 
-       alt="CAIROS Avalanche Mode" 
+       alt="Avalanche Scenario Model Chain" 
        width="300"/>
 </p>
 
 <h4 align="center">⚠️ Handle with care — work in progress</h4>
 
 ### Overview
-- The Avalanche Scenario Model Chain is developed with in EUREGIO Project CAIROS
-- The Avalanche Scenario Model Chain steps are the preprocessing for the Avalanche Scenario Mapper
-- The Avalanche Scenario Model Chain is a orchestrates the full automated avalanche modelling workflow — from raw terrain data to structured delineation of potential release areas (PRAs) and size dependent avalanche simulations.
-- The Model Chain (Steps 00–15) produces the AvaDirectoryResults dataset used by Step 16 (AvaScenarioMapper).
-- It runs with its **own Pixi environment**, independent of the Mapper environment.
+- The Avalanche Scenario Model Chain is developed within EUREGIO Project CAIROS
+- It forms the preprocessing pipeline for the Avalanche Scenario Mapper (Step 16).
+- It orchestrates a full automated avalanche modelling workflow:
+  - raw terrain data → PRA delineation → PRA segmentation → FlowPy parameterization → simulation → AvaDirectory construction.
+- Steps 00–15 produce the AvaDirectoryResults dataset used by the mapper.
+- The Model Chain runs in its own Pixi environment, independent from the Mapper environment.
 ---
 
 ## Repository layout
 
 ```text
 openNHM/
-└── AvaScenarioModelChain/           # Main Python package (modular CAIROS workflow)
+└── AvaScenarioModelChain/       # Main Python package (modular model chain workflow)
     │
-    ├── cairosCfg.ini           # Default configuration (global)
-    ├── local_cairosCfg.ini     # Local project override (preferred for runs)
+    ├── avaScenModelChainCfg.ini           # Default configuration (global)
+    ├── local_avaScenModelChainCfg.ini     # Local project override (preferred for runs)
     │
-    ├── runCairos.py            # Main driver (Steps 00–15, orchestrates workflow)
-    ├── runInitWorkDir.py       # Step 00 – Initialize project directory + logs
-    ├── runPlots.py             # Optional plotting entrypoint (not in main workflow)
+    ├── runAvaScenModelChain.py            # Main driver (Steps 00–15, orchestrates workflow)
+    ├── runInitWorkDir.py                  # Step 00 – Initialize project directory + logs
+    ├── runPlots.py                        # Optional plotting entrypoint (not in main workflow)
     │
     ├── com1PRA/                # Step 01–08: Potential Release Area (PRA) workflow
-    │   ├── praDelineation.py           # Step 01 – Derive PRA field from DEM + forest
-    │   ├── praSelection.py             # Step 02 – Apply thresholds, aspect + region masks
-    │   ├── praSubCatchments.py         # Step 03 – Delineate subcatchments (WhiteboxTools)
-    │   ├── praProcessing.py            # Step 04 – Clean and polygonize PRA masks → GeoJSON
-    │   ├── praSegmentation.py          # Step 05 – Intersect PRAs with subcatchments → GeoJSON
-    │   ├── praAssignElevSize.py        # Step 06 – Classify PRAs by elevation + area size
-    │   ├── praPrepForFlowPy.py         # Step 07 – Prepare PRAs for FlowPy simulation
-    │   ├── praMakeBigDataStructure.py  # Step 08 – Build aggregated FlowPy input tree
-    │   ├── bottleneckSmoothing.py      # Not used ATM
+    │   ├── praDelineation.py              # Step 01 – Derive PRA field from DEM + forest
+    │   ├── praSelection.py                # Step 02 – Apply thresholds, aspect + region masks
+    │   ├── praSubCatchments.py            # Step 03 – Delineate subcatchments (WhiteboxTools)
+    │   ├── praProcessing.py               # Step 04 – Clean and polygonize PRA masks → GeoJSON
+    │   ├── praSegmentation.py             # Step 05 – Intersect PRAs with subcatchments → GeoJSON
+    │   ├── praAssignElevSize.py           # Step 06 – Classify PRAs by elevation + area size
+    │   ├── praPrepForFlowPy.py            # Step 07 – Prepare PRAs for FlowPy simulation
+    │   ├── praMakeBigDataStructure.py     # Step 08 – Build aggregated FlowPy input tree
+    │   ├── bottleneckSmoothing.py         # Not used ATM
     │   └── __init__.py
     │
     ├── com2AvaDirectory/       # Step 09–15: FlowPy & Avalanche Directory chain
-    │   ├── avaDirBuildFromFlowPy.py    # Step 13 – Convert FlowPy results to AvaDirectory
-    │   ├── avaDirType.py               # Step 14 – Build scenario type structure (dry/wet)
-    │   ├── avaDirResults.py            # Step 15 – Aggregate final scenario results/maps
+    │   ├── avaDirBuildFromFlowPy.py       # Step 13 – Convert FlowPy results to AvaDirectory
+    │   ├── avaDirType.py                  # Step 14 – Build scenario type structure (dry/wet)
+    │   ├── avaDirResults.py               # Step 15 – Aggregate final scenario results/maps
     │   └── __pycache__/
     │
-    ├── in1Utils/               #Core utilities (shared across all modules)
-    │   ├── cfgUtils.py          # Config handling, GDAL/PROJ setup, manifest writers
-    │   ├── dataUtils.py         # Raster/vector I/O, compression, helper functions
-    │   ├── plottingUtils.py     # Plotting helpers (matplotlib/geopandas)
-    │   ├── workflowUtils.py     # Workflow flag parsing, discovery of FlowPy leaves
+    ├── in1Utils/               # Core utilities (shared across all modules)
+    │   ├── cfgUtils.py                    # Config handling, GDAL/PROJ setup, manifest writers
+    │   ├── dataUtils.py                   # Raster/vector I/O, compression, helper functions
+    │   ├── plottingUtils.py               # Plotting helpers (matplotlib/geopandas)
+    │   ├── workflowUtils.py               # Workflow flag parsing, discovery of FlowPy leaves
     │   └── __pycache__/
     │
     ├── in2Parameter/           # Parameterization + FlowPy integration
-    │   ├── compParams.py        # Step 09/11 – Compute size-dependent FlowPy parameters
-    │   ├── sizeParameters.py    # Parameter range management for simulation inputs
-    │   ├── muxi.py              # Additional parameter computation utilities
+    │   ├── compParams.py                  # Step 09/11 – Compute size-dependent FlowPy parameters
+    │   ├── sizeParameters.py              # Parameter range management for simulation inputs
+    │   ├── muxi.py                        # Additional parameter computation utilities
     │   └── __pycache__/
     │
     ├── outPlots/               # Optional plotting layer
-    │   ├── out1SizeParameter.py # Plot FlowPy parameter outputs (alpha/umax/etc.)
-    │   ├── plotFunctions.py     # Common plotting logic
+    │   ├── out1SizeParameter.py           # Plot FlowPy parameter outputs (alpha/umax/etc.)
+    │   ├── plotFunctions.py               # Common plotting logic
     │   └── __pycache__/
     │
     └── __pycache__/
@@ -74,13 +75,9 @@ openNHM/
 ## Quick start (Linux)
 
 #### 1. Minimal system prerequisites
-* Install only the flexible, OS-level tools system-wide.
-* All python dependencies (AvaFrame, CAIROS, GDAL, NumPy, etc.) are installed exclusively inside the Pixi environment defined in this repository.
-* System Python (python3.10 or 3.11 on Ubuntu) is kept minimal — used only for tools like VS Code, Pixi bootstrap, etc.
-* CAIROS and AvaFrame never touch system Python → they live in isolated .pixi/envs/* environments.
-* Optional:
-  * Install VS Code for editing, debugging, and integrated terminals:
-https://code.visualstudio.com/download
+* Keep system Python minimal
+* Everything runs inside Pixi
+* AvaFrame is linked in editable mode
 
 ```bash
 # System-wide basics
@@ -107,12 +104,12 @@ git checkout PS_FP_outputRelInfo
 
 #### Two options from here:
 
-Option A: Use AvaFrame via CAIROS
-  - Nothing else required — CAIROS links AvaFrame in editable mode automatically through Pixi.
+Option A: Use AvaFrame via AvaScenarioModelChain
+  - Nothing else required — AvaScenarioModelChain links AvaFrame in editable mode automatically through Pixi.
   - Skip the manual build step.
 
 Option B: Use AvaFrame standalone
-  - If you want to run AvaFrame directly (outside CAIROS), you need to compile the Cython parts:
+  - If you want to run AvaFrame directly (outside AvaScenarioModelChain), you need to compile the Cython parts:
 
 ```bash
 # set the avalanche dir in local_avaFrameCfg.py and apply your settungs to local_com4FlowPyCfg.ini
@@ -127,15 +124,15 @@ python runCom4FlowPy.py
 ```
   - Repeat this step whenever Cython code changes or after pulling new updates.
 
-### 3) Install CAIROS repo
+### 3) Install AvaScenarioModelChain repo
 
 ```bash
 # choose your workspace directory next to AvaFrame
 cd ~/Documents/Applications
-git clone https://github.com/OpenNHM/AvaScenarioModelChain.git
+git clone https://github.com/OpenNHM/AvaScenarioModelChain.git AvaScenarioModelChain
 cd AvaScenarioModelChain
 ```
-### 4) Setup CAIROS ModelChain env
+### 4) Setup AvaScenarioModelChain pixi env
 
 ```bash
 # Clean any old envs if something is corrupted
@@ -147,7 +144,7 @@ rm -rf .pixi
 # Install dev env (with local AvaFrame)
 pixi install -e dev
 
-# Check that CAIROS uses your local AvaFrame
+# Check that AvaScenarioModelChain uses your local AvaFrame
 pixi shell -e dev
 python -c "import avaframe, pathlib; print(pathlib.Path(avaframe.__file__).resolve())"
 > .../Documents/Applications/AvaFrame/avaframe/__init__.py
@@ -160,7 +157,7 @@ Copy the defaults and edit the **local** copies:
 ```bash
 # ModelChain config
 cd AvaScenarioModelChain
-cp cairosCfg.ini local_cairosCfg.ini
+cp avaScenModelChain.ini local_avaScenModelChain.ini
 
 # AvaFrame config
 cd ../AvaFrame/avaframe
@@ -172,9 +169,9 @@ cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
 ```
 ---
 
-## Running cairos ...
+## Running AvaScenarioModelChain ...
 
-- Fill in `local_cairosCfg.ini` → `[MAIN]` with your project info and input filenames (the files must exist in the run’s `00_input/` folder once the project is initialized).
+- Fill in `local_avaScenModelChain.ini` → `[MAIN]` with your project info and input filenames (the files must exist in the run’s `00_input/` folder once the project is initialized).
 - Adapt your local_*Cfg.ini's
 - Details TBA....
 
@@ -194,18 +191,18 @@ cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
 
 
 ```bash
-cd Cairos/cairosModelChain #location of runCairos.py
-pixi run -e dev cairos
+cd Cairos/AvaScenarioModelChain #location of runAvaScenModelChain.py
+pixi run -e dev modelchain
 ```
 - after first initialzation run you see: 
 ```bash
 INFO:__main__: 
 
-       ============================================================================
-          ... Start main driver for CAIROS model chain (2025-11-06 13:11:24) ...
-       ============================================================================
+       ===============================================================================
+          ... Start main driver for AvaScenarioModelChain (YYYY-MM-DD HH:MM:SS) ...
+       ===============================================================================
 
-INFO:__main__: Config file: /home/christoph/Documents/Applications/Cairos/cairosModelChain/local_cairosCfg.ini
+INFO:__main__: Config file: /home/christoph/Documents/Applications/Cairos/AvaScenarioModelChain/local_avaScenModelChain.ini
 INFO:__main__: Step 00: Initializing project...
 INFO:runInitWorkDir: cairosDir: /media/christoph/Daten/Cairos/ModelChainProcess/cairosTutti/pilotSellaTest/alpha32_3_umax8_18_maxS5_
 INFO:runInitWorkDir: ...cairosDir: ./.
@@ -232,7 +229,7 @@ INFO:runInitWorkDir: ...avaScenPreviewDir: ./14_avaScenPreview
 INFO:runInitWorkDir: ...plotsDir: ./91_plots
 INFO:runInitWorkDir: ...gisDir: ./92_GIS
 INFO:__main__: Step 00: Project initialized in 0.01s
-INFO:__main__: Step 00: Log file: runCairos_20251106_131124.log
+INFO:__main__: Step 00: Log file: runAvaScenModelChain_20251106_131124.log
 ERROR:__main__: Step 00: Required input files are missing in ./00_input:
 ERROR:__main__:   - DEM=10DTM_pilotSellaTest.tif
 ERROR:__main__:   - FOREST=10nDOM_binAgg_100_pilotSellaTest_forestCom.tif
@@ -255,22 +252,22 @@ AVAREPORT = avaReportMicroRegions.geojson
 ```
 -  run again...
 ```bash
-cd Cairos/cairosModelChain #location of runCairos.py
-pixi run -e dev cairos
+cd Cairos/AvaScenarioModelChain #location of runAvaScenModelChain.py
+pixi run -e dev modelchain
 ```
 - when all input is provided and checked you will see: 
 ```bash
 ...
 INFO:__main__: Step 00: Project initialized in 0.01s
-INFO:__main__: Step 00: Log file: runCairos_20251106_113707.log
+INFO:__main__: Step 00: Log file: runAvaScenModelChain_20251106_113707.log
 INFO:__main__: Step 00: Input DEM validated: nodata + CRS check done.
 INFO:__main__: Step 00: Input FOREST validated: nodata + CRS check done.
 INFO:__main__: Step 00: All raster inputs validated: DEM + FOREST nodata/CRS checked and safe.
 INFO:__main__: All inputs complete: /media/christoph/Daten/Cairos/ModelChainProcess/cairosTutti/pilotSellaTest/alpha32_3_umax8_18_maxS5/00_input
 
-       ============================================================================
+       ===============================================================================
                ... LET'S KICK IT - AVALANCHE SCENARIOS in 3... 2... 1...
-       ============================================================================
+       ===============================================================================
 ... 
 ```
 
@@ -295,7 +292,7 @@ singleTestDir = pra030secE-1800-2000-4
 
 ### Step 00 — Initialize project folders
 
-- Creates the standardized CAIROS run directory structure based on `[MAIN]` in your `cairosCfg.ini`.
+- Creates the standardized AvaScenarioModelChain run directory structure based on `[MAIN]` in your `avaScenModelChain.ini`.
   - Each run lives in its own tree:
 
 ```text
@@ -328,14 +325,14 @@ singleTestDir = pra030secE-1800-2000-4
 - Each workflow run automatically creates a timestamped log file:
 
   ```
-  <workDir>/<project>/<ID>/runCairos_YYYYMMDD_HHMMSS.log
+  <workDir>/<project>/<ID>/runAvaScenModelChain_YYYYMMDD_HHMMSS.log
   ```
 
 ---
 
 ### Steps 01–08 — PRA processing (`com1PRA`)
 
-- The PRA chain defines the complete pre-processing stage of CAIROS — from delineating potential release areas to creating structured, FlowPy-ready input datasets.
+- The PRA chain defines the complete pre-processing stage of AvaScenarioModelChain — from delineating potential release areas to creating structured, FlowPy-ready input datasets.
 - Each step builds directly on the previous one, and together they establish the BigData foundation used in later FlowPy and AvaDirectory processing.
 
 
@@ -398,7 +395,7 @@ singleTestDir = pra030secE-1800-2000-4
 - **NOTE**: No `Size5` for `wet/` Avalanches!!!
 
 ### Summary:  
-- Steps 01–08 create the foundation of the CAIROS workflow.  
+- Steps 01–08 create the foundation of the AvaScenarioModelChain workflow.  
 - They transform raw terrain and PRA data into a fully structured **BigData input tree**, ready for parameterization (Step 09) and FlowPy simulations (Step 10).
 
 
@@ -420,23 +417,23 @@ singleTestDir = pra030secE-1800-2000-4
 
 ### Step 10 — Run FlowPy (per leaf)
 
-- **NOTE**: FlowPy is now executed directly through AvaFrame — there is no `runCairosFlowPy.py` anymore.
+- **NOTE**: FlowPy is now executed directly through AvaFrame — there is no `runAvaScenModelChainFlowPy.py` anymore.
 
-- Driver: `cairos/runCairos.py`
+- Driver: `AvaScenarioModelChain/runAvaScenModelChain.py`
 - FlowPy INI: `AvaFrame/avaframe/com4FlowPy/com4FlowPyCfg.ini`
   - Copy to `local_com4FlowPyCfg.ini` before editing
 
-Example FlowPy configuration used for CAIROS runs:
+Example FlowPy configuration used for AvaScenarioModelChain runs:
 
 ```ini
 [GENERAL]
 infra = False
 previewMode = False
-variableUmaxLim = True              # important for CAIROS
-varUmaxParameter = uMax             # important for CAIROS
-variableAlpha = True                # important for CAIROS
-variableExponent = True             # important for CAIROS
-forest = False                      # important for CAIROS
+variableUmaxLim = True              # important for AvaScenarioModelChain
+varUmaxParameter = uMax             # important for AvaScenarioModelChain
+variableAlpha = True                # important for AvaScenarioModelChain
+variableExponent = True             # important for AvaScenarioModelChain
+forest = False                      # important for AvaScenarioModelChain
 ...
 
 # computational defaults
@@ -452,9 +449,9 @@ outputNoDataValue = -9999
 outputFiles = zDelta|travelLengthMax|fpTravelAngleMax|cellCounts|relIdPolygon
 useCustomPaths = False
 deleteTempFolder = True
-useCustomPathDEM = True             # important for CAIROS
+useCustomPathDEM = True             # important for AvaScenarioModelChain
 workDir =
-demPath = ...00_input/10DTM_pilotSellaTest.tif  # important for CAIROS
+demPath = ...00_input/10DTM_pilotSellaTest.tif  # important for AvaScenarioModelChain
 ...
 
 [FLAGS]

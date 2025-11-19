@@ -1,4 +1,4 @@
-# cairos/in1Utils/cfgUtils.py
+# AvaScenarioModelChain/in1Utils/cfgUtils.py
 
 import configparser
 import pathlib
@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 # Basic config helpers
 # ----------------------------------------------------------------------
 
-def getConfig(modName: str = "cairos") -> configparser.ConfigParser:
+def getConfig(modName: str = "avaScenModelChain") -> configparser.ConfigParser:
     """
     Load config from either local_<modName>Cfg.ini or <modName>Cfg.ini in CWD.
     Returns a ConfigParser (case-preserving).
@@ -159,7 +159,7 @@ def parseIntRangeExpr(expr: str, default: Optional[List[int]] = None) -> List[in
 
 def writeEffectiveConfig(cfg: configparser.ConfigParser,
                          cairosDir: Union[str, pathlib.Path],
-                         filename: str = "cairos_effective.ini") -> pathlib.Path:
+                         filename: str = "avaScenModelChain_effective.ini") -> pathlib.Path:
     """
     Write the exact ConfigParser (including any in-memory overrides) to cairosDir.
     """
@@ -253,7 +253,7 @@ def setupGdalEnv(verbose: bool = False) -> None:
       - PROJ networking is disabled for reproducibility
       - GDAL exceptions are enabled to avoid FutureWarnings
 
-    Call once at program startup (e.g., in runCairos.py).
+    Call once at program startup (e.g., in runAvaScenModelChain.py).
     """
 
 

@@ -1,3 +1,6 @@
+# AvaScenarioModelChain/out1Plots/out1SizeParameter.py
+# Author: Paula Spannring (BFW)
+
 import numpy as np
 import matplotlib.pyplot as plt
 

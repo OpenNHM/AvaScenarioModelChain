@@ -1,11 +1,51 @@
-# ------------------ workflowUtils.py ------------------ #
-# Purpose: Shared workflow helpers used across CAIROS steps and runCairos.py
-# Inputs : Configuration parser + workFlowDir dictionary
-# Outputs: Utility functions for step control, logging, directory discovery,
-#          and runtime management across all modules.
-# Config : [WORKFLOW], [MAIN], [avaPARAMETER], [praMAKEBIGDATASTRUCTURE]
-# Consumes: None directly
-# Provides: Utility functions for higher-level workflow orchestration
+# ------------- workflowUtils.py ---------------------------------------- #
+#
+# Purpose :
+#     Provide shared workflow helper functions used across all modules of the
+#     Avalanche Scenario Model Chain. This includes unified step control,
+#     directory discovery, input validation, logging management, timing helpers,
+#     and FlowPy-specific execution wrappers.
+#
+# Inputs :
+#     - Configuration parser (ConfigParser)
+#     - workFlowDir dictionary containing all step directories
+#
+# Outputs :
+#     - Utility functions for:
+#         • step activation logic
+#         • consistent logging and timing
+#         • FlowPy leaf discovery and filtering
+#         • input presence and CRS validation
+#         • safe execution wrappers for FlowPy
+#
+# Config :
+#     [WORKFLOW]
+#     [MAIN]
+#     [avaPARAMETER]
+#     [praMAKEBIGDATASTRUCTURE]
+#
+# Consumes :
+#     - None directly (utility layer)
+#
+# Provides :
+#     - Core orchestration tools used by:
+#         • runAvaScenModelChain.py (master driver)
+#         • All PRA preprocessing steps (01–08)
+#         • FlowPy integration steps (09–12)
+#         • AvaDirectory construction steps (13–15)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 from __future__ import annotations
 from typing import Optional
