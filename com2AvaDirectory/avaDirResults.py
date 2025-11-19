@@ -1,10 +1,43 @@
-# ------------------ Step 15: AvaDirectory Results ------------------ #
-# Purpose: Enrich AvaDirectoryType with raster paths for each PRA/result combination.
-# Inputs : 12_avaDirectory/<caseFolder>/avaDirectoryType.parquet + 11_avaDirectoryData/<caseFolder>/com4_*/.tif
-# Outputs: 12_avaDirectory/<caseFolder>/avaDirectoryResults.csv|.geojson|.parquet + indexAvaFiles.pkl
-# Config : [avaDIRECTORY] + [WORKFLOW]
-# Consumes: Step 14 outputs (AvaDirectoryType)
-# Provides: Master AvaDirectoryResults table (for scenario maps / Step 16)
+# ------------ Step 15: AvaDirectory Results ---------------------------- #
+#
+# Purpose :
+#     Enrich the AvaDirectoryType table (from Step 14) with paths to all
+#     raster outputs associated with each PRA and simulation scenario.
+#     Produces a complete, scenario-resolved AvaDirectoryResults dataset
+#     used for visualization, mapping, and statistical post-processing.
+#
+# Inputs :
+#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.parquet
+#     - 11_avaDirectoryData/<caseFolder>/com4_*/   (FlowPy result rasters)
+#
+# Outputs :
+#     - 12_avaDirectory/<caseFolder>/avaDirectoryResults.csv  | .geojson | .parquet
+#     - 12_avaDirectory/<caseFolder>/indexAvaFiles.pkl
+#
+# Config :
+#     [avaDIRECTORY]
+#     [WORKFLOW]
+#
+# Consumes :
+#     - Step 14 outputs (AvaDirectoryType)
+#
+# Provides :
+#     - Master AvaDirectoryResults dataset for:
+#         • Scenario map creation (Step 16 / Step 17 usage)
+#         • Statistical or spatial analysis
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import pickle

@@ -1,3 +1,6 @@
+# AvaScenarioModelChain/out1Plots/plotFunctions.py
+# Author: Paula Spannring (BFW)
+
 import numpy as np
 
 import in1Utils.dataUtils as dataUtils

@@ -1,10 +1,46 @@
-# ------------------ Step 05: PRA Segmentation ------------------ #
-# Purpose: Intersect cleaned PRA polygons with smoothed subcatchments.
-# Inputs:  PRA polygons from Step 04 (GeoJSONs), subcatchments (Step 03 SHP)
-# Outputs: Segmented PRA GeoJSONs + filtered GeoJSONs by size
-# Config:  [praSEGMENTATION]
-# Consumes: Cleaned PRA polygons + subcatchment shapefiles
-# Provides: Segmented PRA polygons for later steps
+# ------------------ Step 05: PRA Segmentation -------------------------- #
+#
+# Purpose :
+#     Segment cleaned PRA polygons (from Step 04) by intersecting them with
+#     smoothed subcatchment units (from Step 03). This ensures hydrologically
+#     meaningful PRA partitions and prepares size-filtered PRA subsets for
+#     elevation and size assignment.
+#
+# Inputs :
+#     - Cleaned PRA polygons (GeoJSONs) from Step 04
+#     - Subcatchment polygons (SHP/GeoJSON) from Step 03
+#
+# Outputs :
+#     - Segmented PRA GeoJSONs (PRA × subcatchment intersections)
+#     - Size-filtered PRA GeoJSONs according to segmentation thresholds
+#
+# Config :
+#     [praSEGMENTATION]
+#         • sizeClass definitions
+#         • minimum area thresholds
+#         • optional filters for small objects
+#
+# Consumes :
+#     - Cleaned PRA polygons produced in Step 04
+#     - Subcatchments generated in Step 03
+#
+# Provides :
+#     - Segmented, size-filtered PRA polygons required for:
+#         • Step 06 (Assign Elevation & Size)
+#         • Step 07 (PRA → FlowPy preparation)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import glob

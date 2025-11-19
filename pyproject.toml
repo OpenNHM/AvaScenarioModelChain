@@ -1,5 +1,5 @@
 [project]
-name = "avalanche-model-chain"
+name = "avaScenarioModelChain"
 description = "Avalanche Model Chain workflow (Preprocessing and PRA/Avalanche simulation pipeline)"
 requires-python = ">=3.9,<3.12"
 
@@ -40,7 +40,7 @@ pyarrow  = "*"
 # Task entrypoint
 # ----------------------------------------------------------------------
 [tool.pixi.tasks]
-modelchain = { cmd = "python runCairos.py", cwd = "." }
+modelchain = { cmd = "python runAvaScenModelChain.py", cwd = "." }
 
 # ----------------------------------------------------------------------
 # Environments

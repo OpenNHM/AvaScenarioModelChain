@@ -1,11 +1,50 @@
-# ------------------ Step 08: Make Big Data Structure ------------------ #
-# Purpose: Aggregate per-(band,size) PRA rasters and GeoJSONs into the FlowPy
-#          Big Data directory tree (SizeN/{dry,wet}/Inputs/{REL,RELID,RELJSON}).
-# Input :  ./08_praPrepForFlowPy/BnCh2_subC.../*.tif + *.geojson
-# Output:  ./09_flowPyBigDataStructure/BnCh2_subC.../praXXX-1800-2000-4/...
-# Config:  [praMAKEBIGDATASTRUCTURE]
-# Consumes: Step 07 outputs
-# Provides: FlowPy-ready structured input tree per PRA
+# ------------------ Step 08: Make Big Data Structure ------------------- #
+#
+# Purpose :
+#     Build the FlowPy Big Data directory structure by aggregating and arranging
+#     all per-PRA, per-size, and per-elevation-band inputs produced in Step 07.
+#     The output follows the standardized AvaFrame/FlowPy folder hierarchy:
+#
+#         SizeN/
+#             dry|wet/
+#                 Inputs/
+#                     REL/
+#                     RELID/
+#                     RELJSON/
+#
+# Inputs :
+#     - PRA rasters and GeoJSONs prepared in Step 07
+#       (./08_praPrepForFlowPy/<caseFolder>/*.tif / *.geojson)
+#
+# Outputs :
+#     - Fully structured FlowPy Big Data directory:
+#         ./09_flowPyBigDataStructure/<caseFolder>/
+#             pra<ID>-<elevRange>-<sizeClass>/SizeN/{dry,wet}/Inputs/{REL,RELID,RELJSON}/
+#
+# Config :
+#     [praMAKEBIGDATASTRUCTURE]
+#         • usePraBoundary
+#         • min/max size class per scenario (dry / wet)
+#         • logging settings
+#
+# Consumes :
+#     - Step 07 outputs (PRA → FlowPy preparation)
+#
+# Provides :
+#     - FlowPy-ready directory tree for Step 09 (parameterization) and Step 10 (FlowPy run)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import re

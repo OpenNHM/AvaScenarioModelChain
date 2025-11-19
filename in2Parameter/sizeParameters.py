@@ -1,3 +1,7 @@
+# AvaScenarioModelChain/in2Parameter/sizeParameters.py
+# Author: Paula Spannring (BFW)
+# Modified: Christoph Hesselbach (BFW)
+
 import numpy as np
 import math
 import logging

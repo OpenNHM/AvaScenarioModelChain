@@ -1,17 +1,53 @@
-# ------------------ Step 07: PRA Preparation for FlowPy ------------------ #
-# Purpose: Prepare PRA polygons for FlowPy simulation by:
-#   1) Grouping elevation/size combinations into deterministic ID-based GeoJSONs
-#   2) Rasterizing selected attributes (area, ID) per configuration
-#   3) Optionally deriving PRA boundaries as separate rasters
-# Inputs:
-#   Step 06 outputs: *-ElevBands-Sized.geojson
-#   DEM + BOUNDARY from [MAIN]
-# Outputs:
-#   ./08_praPrepForFlowPy/BnCh2_subC{thr}_{min}_{win}_sizeF{sizeF}/
-#     <band-size>_praID.geojson + [attribute].tif (+ boundary tif)
-# Config: [praPREPFORFLOWPY], [praASSIGNELEV], [praSEGMENTATION], [praSUBCATCHMENTS]
-# Consumes: Step 06 GeoJSONs
-# Provides: Ready-to-raster PRA sets for FlowPy (Step 08)
+# ------------------ Step 07: PRA Preparation for FlowPy ---------------- #
+#
+# Purpose :
+#     Convert enriched PRA polygons (from Step 06) into deterministic,
+#     FlowPy-ready input datasets. This includes:
+#         1) Grouping PRA features by elevation band and size class into
+#            unique ID-based GeoJSONs
+#         2) Rasterizing selected PRA attributes (area, PRA ID, etc.)
+#            according to configuration options
+#         3) Optionally deriving additional PRA boundary rasters for
+#            improved FlowPy computational efficiency
+#
+# Inputs :
+#     - Step 06 outputs:
+#           *-ElevBands-Sized.geojson
+#     - DEM (from [MAIN])
+#     - BOUNDARY polygon (from [MAIN])
+#
+# Outputs :
+#     ./08_praPrepForFlowPy/<caseFolder>/
+#         <band-size>_praID.geojson
+#         <band-size>_<attribute>.tif
+#         (optional) <band-size>_boundary.tif
+#
+# Config :
+#     [praPREPFORFLOWPY]   Rasterization options and boundary settings
+#     [praASSIGNELEV]      Elevation band definitions
+#     [praSEGMENTATION]    Size class configuration
+#     [praSUBCATCHMENTS]   Subcatchment metadata (optional)
+#
+# Consumes :
+#     - GeoJSONs produced in Step 06 (size + elevation classified PRAs)
+#
+# Provides :
+#     - Raster- and vector-prepared PRA datasets required for:
+#         • Step 08 (Make Big Data Structure)
+#         • FlowPy parameter generation and simulation
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import re

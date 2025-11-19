@@ -1,10 +1,47 @@
-# ------------------ Step 14: AvaDirectory Type ------------------ #
-# Purpose: Merge all com4_* folders into a unified AvaDirectoryType dataset.
-# Inputs : 11_avaDirectoryData/<caseFolder>/com4_*/praID*.geojson
-# Outputs: 12_avaDirectory/<caseFolder>/avaDirectoryType.csv|.geojson|.parquet
-# Config : [avaDIRECTORY] + [WORKFLOW]
-# Consumes: Step 13 outputs
-# Provides: Master table for scenario classification (Step 15)
+# ------------ Step 14: AvaDirectory Type ------------------------------- #
+#
+# Purpose :
+#     Combine all per-scenario com4_* directories produced in Step 13 into a
+#     unified AvaDirectoryType dataset. Each PRA–scenario combination is
+#     consolidated into a single feature containing geometry, run metadata,
+#     and key simulation descriptors, enabling consistent scenario-level
+#     classification and filtering.
+#
+# Inputs :
+#     - 11_avaDirectoryData/<caseFolder>/com4_*/praID*.geojson
+#
+# Outputs :
+#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.csv
+#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.geojson
+#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.parquet
+#       (format depends on configuration)
+#
+# Config :
+#     [avaDIRECTORY]
+#     [WORKFLOW]
+#
+# Consumes :
+#     - Step 13 outputs (AvaDirectory Build From FlowPy)
+#
+# Provides :
+#     - Unified AvaDirectoryType dataset for:
+#         • Step 15 (AvaDirectory Results)
+#         • Scenario selection, enrichment, and classification workflows
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
+
+
 
 import os
 import glob

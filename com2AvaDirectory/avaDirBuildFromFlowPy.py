@@ -1,10 +1,45 @@
-# ------------------ Step 13: AvaDirectory Build From FlowPy ------------------ #
-# Purpose: Build per-scenario AvaDirectory structure from FlowPy outputs.
-# Inputs : 09_flowPyBigDataStructure/{caseFolder}/pra*/Size*/dry|wet/Outputs/com4FlowPy
-# Outputs: 11_avaDirectory/{caseFolder}/Map/singleAvaDir/com4_*/praID*.geojson + rasters + avaDirectory.csv
-# Config : [avaDIRECTORY] + [WORKFLOW] + [praSUBCATCHMENTS]/[praSEGMENTATION]/[praMAKEBIGDATASTRUCTURE]
-# Consumes: FlowPy BigData outputs (Step 12)
-# Provides: Structured AvaDirectory input for classification (Step 14)
+# ------------ Step 13: AvaDirectory Build From FlowPy ------------------ #
+#
+# Purpose :
+#     Construct the per-scenario AvaDirectory structure based on FlowPy
+#     simulation outputs. This step organizes all runout results, metadata,
+#     and raster products into a unified directory tree for downstream
+#     classification and visualization.
+#
+# Inputs :
+#     - 09_flowPyBigDataStructure/{caseFolder}/pra*/Size*/{dry,wet}/Outputs/com4FlowPy
+#
+# Outputs :
+#     - 11_avaDirectory/{caseFolder}/Map/singleAvaDir/
+#           com4_<scenario>/praID*.geojson
+#           runout rasters (e.g. fpTravel, fpMax, thickness …)
+#           avaDirectory.csv (global metadata index)
+#
+# Config :
+#     [avaDIRECTORY]
+#     [WORKFLOW]
+#     [praSUBCATCHMENTS], [praSEGMENTATION], [praMAKEBIGDATASTRUCTURE]
+#
+# Consumes :
+#     - FlowPy Big Data outputs aggregated in Step 12
+#
+# Provides :
+#     - Structured AvaDirectory datasets for:
+#         • Step 14 (AvaDirectory Type)
+#         • Step 15 (AvaDirectory Results)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import glob

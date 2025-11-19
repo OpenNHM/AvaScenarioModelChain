@@ -1,10 +1,46 @@
-# ------------------ Step 03: PRA Subcatchments ------------------ #
-# Purpose: Delineate subcatchments from DEM using WhiteboxTools.
-# Inputs:  [MAIN] DEM
-# Outputs: subcatchments_xxx.tif/.shp (smoothed and non-smoothed)
-# Config:  [praSUBCATCHMENTS]
-# Consumes: DEM
-# Provides: subcatchment shapefiles for later PRA segmentation
+# ------------------ Step 03: PRA Subcatchments ------------------------- #
+#
+# Purpose :
+#     Delineate hydrologically meaningful subcatchment units from the DEM
+#     using flow-routing and basin-extraction algorithms (WhiteboxTools).
+#     These subcatchments are later used to segment PRA polygons into
+#     terrain-consistent units.
+#
+# Inputs :
+#     - DEM (from [MAIN])
+#
+# Outputs :
+#     - subcatchments.tif / subcatchments_smoothed.tif
+#     - subcatchments.shp / subcatchments_smoothed.shp
+#       (depending on smoothing and configuration settings)
+#
+# Config :
+#     [praSUBCATCHMENTS]
+#         • streamThreshold
+#         • minLength
+#         • smoothingWindowSize
+#         • weightedSlopeFlow
+#
+# Consumes :
+#     - DEM raster
+#
+# Provides :
+#     - Subcatchment polygons required for:
+#         • Step 05 (PRA Segmentation)
+#         • Subcatchment-aware PRA refinement in downstream steps
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ----------------------------------------------------------------------- #
+
 
 import os
 import sys

@@ -1,5 +1,4 @@
-
-
+#
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 #
 #    ██████╗  ██╗  ██╗ ██████╗     ████████╗  ██████╗ ███████╗ ███╗   ██╗
@@ -11,44 +10,52 @@
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 #    ███████  A V A L A N C H E · S C E N E N A R I O · M O D E L · C H A I N  ████████
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-
-
-# Purpose : Master orchestrator for the CAIROS Avalanche Model Chain (Steps 00–15)
-#            Drives the end-to-end avalanche scenario workflow:
-#            PRA delineation → FlowPy simulation → AvaDirectory compilation.
 #
-# Inputs  : - local_cairosCfg.ini / cairosCfg.ini (project configuration)
-#           - 00_input/ directory containing DEM, FOREST, and BOUNDARY files
+# Purpose :
+#     Master orchestrator for the Avalanche Scenario Model Chain (Steps 00–15).
+#     Drives the end-to-end workflow:
+#         PRA delineation → PRA processing → FlowPy simulation → AvaDirectory compilation.
 #
-# Outputs : Structured scenario directories, FlowPy outputs,
-#            and compiled AvaDirectory datasets ready for visualization or analysis.
+# Inputs :
+#     - local_avaScenModelChainCfg.ini / avaScenModelChainCfg.ini
+#     - 00_input/ directory with DEM, FOREST, BOUNDARY
 #
-# Config  : [MAIN] project metadata & paths
-#           [WORKFLOW] step activation flags
-#           [pra*]  PRA preprocessing parameters (Steps 01–08)
-#           [ava*]  Avalanche simulation and directory configuration (Steps 09–15)
+# Outputs :
+#     - Structured scenario directories
+#     - FlowPy simulation outputs
+#     - AvaDirectory (Types, Results) for mapping / analysis
 #
-# Consumes: Step modules from:
-#              com1PRA/           – PRA delineation and preprocessing (Steps 01–08)
-#              com2AvaDirectory/  – FlowPy result aggregation and AvaDirectory (Steps 13–15)
+# Config :
+#     [MAIN]      Project metadata, paths, input rasters
+#     [WORKFLOW]  Activation flags for all steps
+#     [pra*]      PRA preprocessing (Steps 01–08)
+#     [ava*]      FlowPy parameterization, simulation and directory building (Steps 09–15)
 #
-# Depends on: 
-#     in1Utils.cfgUtils           – configuration and GDAL environment setup
-#     in1Utils.dataUtils          – raster/vector I/O and compression utilities
-#     in1Utils.workflowUtils      – orchestration helpers:
-#                                   • stepEnabled()          → unified flag control
-#                                   • closeEarlyBuffer()     → safe MemoryHandler cleanup
-#                                   • validateInputs()       → input presence and CRS checks
-#                                   • filterSingleTestDirs() → single-leaf test mode
-#                                   • runStep()              → generic step executor with logging
-#                                   • stepTimer()            → context-manager timing
+# Consumes :
+#     com1PRA/            (Steps 01–08)
+#     com2AvaDirectory/   (Steps 13–15)
 #
-# Provides: 
-#     Complete automated execution of the CAIROS Avalanche Model Chain,
-#     generating PRA data, FlowPy simulations, and AvaDirectory results
-#     with unified logging, timing, and resumable workflow control.
+# Depends on :
+#     in1Utils.cfgUtils         – config loading & GDAL/PROJ environment setup
+#     in1Utils.workflowUtils    – unified workflow orchestration (stepEnabled, timers, logging)
+#     in1Utils.dataUtils        – raster/vector I/O, compression utilities
+#     in2Parameter.compParams   – FlowPy parameter generation and size back-mapping
 #
-# ───────────────────────────────────────────────────────────────────────────────────────────────
+# Provides :
+#     Fully automated, resumable Avalanche Scenario Model Chain execution
+#     under unified logging, path handling, timings, and config control.
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Version :
+#     2025-11
+#
+# ------------------------------------------------------------------------------- #
 
 
 
@@ -59,14 +66,14 @@ import configparser
 import pathlib
 from logging.handlers import MemoryHandler
 
-# ------------------ CAIROS core imports ------------------ #
+# ------------------ AvaScenarioModelChain core imports ------------------ #
 import runInitWorkDir as initWorkDir
 import in1Utils.cfgUtils as cfgUtils
 import in1Utils.workflowUtils as workflowUtils
 import in1Utils.dataUtils as dataUtils
 import in2Parameter.compParams as compParams
 
-# ------------------ Component imports -------------------- #
+# ------------------ Component imports ----------------------------------- #
 import com1PRA.praDelineation as praDelineation
 import com1PRA.praSelection as praSelection
 import com1PRA.praSubCatchments as subCatchments
@@ -80,10 +87,10 @@ import com2AvaDirectory.avaDirBuildFromFlowPy as avaDirBuildFromFlowPy
 import com2AvaDirectory.avaDirType as avaDirType
 import com2AvaDirectory.avaDirResults as avaDirResults
 
-# ------------------ AvaFrame interface ------------------ #
+# ------------------ AvaFrame interface ---------------------------------- #
 from avaframe import runCom4FlowPy
 
-# ------------------ Environment setup ------------------- #
+# ------------------ Environment setup ----------------------------------- #
 from in1Utils.cfgUtils import setupGdalEnv
 setupGdalEnv(verbose=True)
 
@@ -94,13 +101,13 @@ log = logging.getLogger(__name__)
 # MAIN DRIVER FUNCTION
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 
-def runCairos(workDir: str = "") -> bool:
+def runAvaScenModelChain(workDir: str = "") -> bool:
     # -------------------------------------------------------------------------
     # Step 00: Initialization -------------------------------------------------
     # -------------------------------------------------------------------------
     modPath = os.getcwd()
-    localFile = os.path.join(modPath, "local_cairosCfg.ini")
-    configPath = localFile if os.path.isfile(localFile) else os.path.join(modPath, "cairosCfg.ini")
+    localFile = os.path.join(modPath, "local_avaScenModelChainCfg.ini")
+    configPath = localFile if os.path.isfile(localFile) else os.path.join(modPath, "avaScenModelChainCfg.ini")
 
     root_logger = logging.getLogger()
     early_buf = MemoryHandler(capacity=10000, flushLevel=logging.CRITICAL)
@@ -109,9 +116,9 @@ def runCairos(workDir: str = "") -> bool:
     # Log header (as before, single INFO entry)
     log.info(
         "\n\n"
-        "       ============================================================================\n"
-        f"          ... Start main driver for CAIROS model chain ({time.strftime('%Y-%m-%d %H:%M:%S')}) ...\n"
-        "       ============================================================================\n"
+        "       ===============================================================================\n"
+        f"          ... Start main driver for AvaScenarioModelChain ({time.strftime('%Y-%m-%d %H:%M:%S')}) ...\n"
+        "       ===============================================================================\n"
     )
     log.info("Config file: %s", os.path.abspath(configPath))
 
@@ -143,7 +150,7 @@ def runCairos(workDir: str = "") -> bool:
 
     # --- Attach log file ---
     log_dir = workFlowDir["cairosDir"]
-    log_path = os.path.join(log_dir, f"runCairos_{time.strftime('%Y%m%d_%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"runAvaScenModelChain_{time.strftime('%Y%m%d_%H%M%S')}.log")
     fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
     fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
@@ -174,9 +181,9 @@ def runCairos(workDir: str = "") -> bool:
     # --- Kickoff banner ---
     log.info(
         "All inputs complete: %s/00_input\n\n"
-        "       ============================================================================\n"
+        "       ===============================================================================\n"
         "               ... LET'S KICK IT - AVALANCHE SCENARIOS in 3... 2... 1...\n"
-        "       ============================================================================\n",
+        "       ===============================================================================\n",
         workFlowDir["cairosDir"],
     )
 
@@ -322,9 +329,9 @@ def runCairos(workDir: str = "") -> bool:
         log.info("Step 10: ...FlowPy run skipped (flag is False)")
 
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Step 13–15: Avalanche Directory Builder
-    # ─────────────────────────────────────────────────────────────────────────
+    # ───────────────────────────────────────────────────────────────────────────────────────────
+    # Step 13–15: Avalanche Directory (Type and Result) Builder
+    # ───────────────────────────────────────────────────────────────────────────────────────────
 
     # -------------------------------------------------------------------------
     # Step 13: Avalanche Directory Build from FlowPy
@@ -379,11 +386,11 @@ def runCairos(workDir: str = "") -> bool:
             log.exception("Step 15: Avalanche Directory Results failed.")
             return False
 
-    # ─────────────────────────────────────────────────────────────────────────
+    # ───────────────────────────────────────────────────────────────────────────────────────────
     # Step 00–15: FINAL SUMMARY
-    # ─────────────────────────────────────────────────────────────────────────
+    # ───────────────────────────────────────────────────────────────────────────────────────────
     total = sum(stepStats.values())
-    log.info("\n\nCAIROS Workflow Summary...\n")
+    log.info("\n\nAvaScenarioModelChain Summary...\n")
     for s, dur in stepStats.items():
         log.info("%-12s ✅ %.2fs", s, dur)
     log.info("Total runtime: %.2fs", total)
@@ -391,16 +398,16 @@ def runCairos(workDir: str = "") -> bool:
 
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────────────────────────────────
 # MAIN RUNNER
-# ─────────────────────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s:%(name)s: %(message)s")
 
-    # Enable informative logging for key CAIROS modules
+    # Enable informative logging for key AvaScenarioModelChain modules
     for name in [
         "__main__",
-        "runCairos",
+        "runAvaScenModelChain",
         "runInitWorkDir",
         "in1Utils.workflowUtils", 
         "com2AvaDirectory.avaDirBuildFromFlowPy",
@@ -420,11 +427,11 @@ if __name__ == "__main__":
         logging.getLogger(name).setLevel(logging.WARNING)
 
     t_all = time.perf_counter()
-    success = runCairos()
+    success = runAvaScenModelChain()
     if success:
         log.info(
-            "\n\n       ============================================================================\n"
-            "                 ... CAIROS WORKFLOW DONE - completed in %.2fs ...\n"
-            "       ============================================================================\n",
+            "\n\n       ===============================================================================\n"
+            "                 ... AvaScenarioModelChain WORKFLOW DONE - completed in %.2fs ...\n"
+            "       ===============================================================================\n",
             time.perf_counter() - t_all,
         )
