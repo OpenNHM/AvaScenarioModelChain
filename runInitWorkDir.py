@@ -1,4 +1,50 @@
-# runInitWorkDir.py
+# ---------------- runInitWorkDir.py ------------------------------------ #
+#
+# Purpose :
+#     Initialize the directory structure for the Avalanche Scenario Model Chain
+#     based on user configuration. Creates all step-level folders (00–15) and
+#     returns an absolute-path dictionary used across all modules for I/O
+#     consistency.
+#
+# Inputs :
+#     - Path to INI configuration file (str or pathlib.Path)
+#     - or an in-memory ConfigParser object
+#
+# Outputs :
+#     - A dictionary mapping canonical directory keys (e.g., inputDir,
+#       praDelineationDir, flowPyRunDir, avaDirTypeDir …) to absolute paths
+#     - A fully created project directory tree:
+#           <workDir>/<project>/<ID>/
+#
+# Config :
+#     [MAIN]
+#         initWorkDir   = True/False
+#         workDir       = base directory for all outputs
+#         project       = project name
+#         ID            = unique run identifier
+#
+# Consumes :
+#     - Reads only configuration metadata; does not depend on any workflow step
+#
+# Provides :
+#     - Canonical workFlowDir dictionary consumed by:
+#         • Steps 01–08  (PRA preprocessing)
+#         • Steps 09–12  (FlowPy parameterization + simulation)
+#         • Steps 13–15  (AvaDirectory builders)
+#         • runAvaScenModelChain.py (master driver)
+#
+# Author :
+#     Christoph Hesselbach
+#
+# Institution :
+#     Austrian Research Centre for Forests (BFW)
+#     Department of Natural Hazards | Snow and Avalanche Unit
+#
+# Date & Version :
+#   2025-11 - 1.0
+#
+# ----------------------------------------------------------------------- #
+
 
 from typing import Union
 import os
