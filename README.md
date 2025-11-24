@@ -14,9 +14,10 @@
 
 ---
 ### Overview
-- The Avalanche Scenario Model Chain is developed within EUREGIO Project CAIROS
-- It forms the preprocessing pipeline for the Avalanche Scenario Mapper (Step 16).
-- It orchestrates a full automated avalanche modelling workflow:
+- The Avalanche Scenario Model Chain is developed within **project CAIROS**.
+  - **The project CAIROS is funded by the European Regional Development Fund and Interreg VI-A Italy-Austria 2021-2027**.
+- this repo forms the preprocessing pipeline for the Avalanche Scenario Mapper (Step 16).
+- Avalanche Scenario Model Chain orchestrates a full automated avalanche modelling workflow:
   - raw terrain data → PRA delineation → PRA segmentation → FlowPy parameterization → simulation → AvaDirectory construction.
 - Steps 00–15 produce the AvaDirectoryResults dataset used by the mapper.
 - The Model Chain runs in its own Pixi environment, independent from the Mapper environment.

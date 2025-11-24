@@ -322,3 +322,46 @@ def preserveLoggingForFlowPy():
             root_logger.removeHandler(flowpy_handler)
             flowpy_handler.close()
         root_logger.handlers = handlers_backup
+
+
+
+# ------------------ Resume-aware FlowPy leaf filtering ------------------ #
+
+def filterAlreadyCompletedLeaves(cfg, avaDirs: list[pathlib.Path], workFlowDir, stepLabel="Step 10"):
+    """
+    If resumeFlowPyRun=True in [WORKFLOW]:
+        → skip leaves where Outputs/com4FlowPy (or Outputs/) already exists.
+
+    Returns a filtered list of leaves that still need processing.
+    """
+    wf = cfg["WORKFLOW"]
+    doResume = wf.getboolean("resumeFlowPyRun", fallback=False)
+
+    if not doResume:
+        return avaDirs
+
+    filtered = []
+    cairosDir = workFlowDir["cairosDir"]
+
+    for d in avaDirs:
+        outDir = d / "Outputs"
+        outDirLegacy = outDir / "com4FlowPy"   # legacy pre-2025 structure
+
+        if outDir.exists() and any(outDir.iterdir()):
+            relp = os.path.relpath(str(d), start=cairosDir)
+            log.info("%s: Skipping ./%s → existing Outputs/", stepLabel, relp)
+            continue
+
+        if outDirLegacy.exists() and any(outDirLegacy.iterdir()):
+            relp = os.path.relpath(str(d), start=cairosDir)
+            log.info("%s: Skipping ./%s → existing Outputs/com4FlowPy/", stepLabel, relp)
+            continue
+
+        filtered.append(d)
+
+    n_skip = len(avaDirs) - len(filtered)
+    if n_skip > 0:
+        log.info("%s: ResumeFlowPyRun enabled → %d leaves skipped (already completed).",
+                 stepLabel, n_skip)
+
+    return filtered

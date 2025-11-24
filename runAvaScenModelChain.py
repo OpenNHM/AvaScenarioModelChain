@@ -262,25 +262,45 @@ def runAvaScenModelChain(workDir: str = "") -> bool:
 
 
     # -------------------------------------------------------------------------
-    # Step 10–12: FlowPy run & postprocessing
+    # Step 10–12: FlowPy run & postprocessing (resume-aware)
     # -------------------------------------------------------------------------
     if workflowUtils.stepEnabled(workflowFlags, "flowPyRun", masterFlowPy):
         t10 = time.perf_counter()
         log.info("Step 10: Start FlowPy run...")
         try:
+            # -----------------------------------------------------------------
             # Discover and filter FlowPy leaves
+            # -----------------------------------------------------------------
             avaDirs = workflowUtils.discoverAndFilterAvaDirs(cfg, workFlowDir, "Step 10")
-            if not avaDirs:
-                log.error("Step 10: No FlowPy directories available; cannot continue.")
-                return False
 
+            # NEW: resumeFlowPyStep → skip leaves with existing Outputs/
+            avaDirs = workflowUtils.filterAlreadyCompletedLeaves(
+                cfg, avaDirs, workFlowDir, "Step 10"
+            )
+
+            # No remaining dirs after resume filtering?
+            if not avaDirs:
+                if workflowFlags.getboolean("resumeFlowPyStep", fallback=False):
+                    log.info(
+                        "Step 10: All FlowPy leaves already completed → nothing to run "
+                        "(resumeFlowPyStep=True)."
+                    )
+                    return True
+                else:
+                    log.error("Step 10: No FlowPy directories available; cannot continue.")
+                    return False
+
+            # -----------------------------------------------------------------
             # Optional post-processing flags
+            # -----------------------------------------------------------------
             doSize     = workflowUtils.stepEnabled(workflowFlags, "flowPyOutputToSize",   masterFlowPy)
             doCompress = workflowUtils.stepEnabled(workflowFlags, "flowPyOutputCompress", masterFlowPy)
             delOG      = workflowUtils.stepEnabled(workflowFlags, "flowPyDOutputDeleteOGFiles", masterFlowPy)
             delTemp    = workflowUtils.stepEnabled(workflowFlags, "flowPyDeleteTempFolder",     masterFlowPy)
 
-            # Loop over FlowPy directories
+            # -----------------------------------------------------------------
+            # Loop over FlowPy directories (resume-aware)
+            # -----------------------------------------------------------------
             for avaDir in avaDirs:
                 relLeaf = os.path.relpath(avaDir, workFlowDir["cairosDir"])
                 log.info("Step 10: Running FlowPy for ./%s...", relLeaf)
@@ -289,10 +309,14 @@ def runAvaScenModelChain(workDir: str = "") -> bool:
                 with workflowUtils.preserveLoggingForFlowPy():
                     runCom4FlowPy.main(avalancheDir=str(avaDir))
 
-                log.info("Step 10: FlowPy run finished for ./%s in %.2fs",
-                         relLeaf, time.perf_counter() - t_leaf)
+                log.info(
+                    "Step 10: FlowPy run finished for ./%s in %.2fs",
+                    relLeaf, time.perf_counter() - t_leaf
+                )
 
+                # -----------------------------------------------------------------
                 # Step 11: Optional back-map
+                # -----------------------------------------------------------------
                 if doSize:
                     try:
                         log.info("Step 11: Back-map FlowPy output to size for ./%s", relLeaf)
@@ -301,7 +325,9 @@ def runAvaScenModelChain(workDir: str = "") -> bool:
                         log.exception("Step 11: Results → size failed for ./%s", relLeaf)
                         return False
 
+                # -----------------------------------------------------------------
                 # Step 12: Compression / cleanup
+                # -----------------------------------------------------------------
                 if doCompress:
                     try:
                         outDir = pathlib.Path(avaDir) / "Outputs"
@@ -319,14 +345,19 @@ def runAvaScenModelChain(workDir: str = "") -> bool:
                         log.exception("Step 12: Delete temp data failed for ./%s", relLeaf)
                         return False
 
+            # -----------------------------------------------------------------
+            # Final timing + log
+            # -----------------------------------------------------------------
             stepStats["Step 10"] = time.perf_counter() - t10
             log.info("Step 10–12: FlowPy + postprocessing completed in %.2fs", stepStats["Step 10"])
 
         except Exception:
             log.exception("Step 10–12: FlowPy processing failed.")
             return False
+
     else:
         log.info("Step 10: ...FlowPy run skipped (flag is False)")
+
 
 
     # ───────────────────────────────────────────────────────────────────────────────────────────
