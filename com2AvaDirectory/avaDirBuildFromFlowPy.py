@@ -40,17 +40,14 @@
 #
 # ----------------------------------------------------------------------- #
 
-
 import os
 import glob
-import json
 import time
 import shutil
 import logging
 import warnings
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -65,15 +62,24 @@ try:
 except Exception:
     _HAS_PYOGRIO = False
 
-try:
-    from shapely.geometry import shape
-    from shapely.ops import unary_union
-    _HAS_SHAPELY = True
-except Exception:
-    _HAS_SHAPELY = False
-
 from in1Utils.dataUtils import relPath
 import in1Utils.workflowUtils as workflowUtils
+
+import sys
+from functools import partial
+from tqdm import tqdm as _tqdm
+
+tqdm = partial(
+    _tqdm,
+    ncols=60,                
+    dynamic_ncols=False,    
+    leave=False,
+    mininterval=0.2,
+    ascii=True,             
+    bar_format="{l_bar}{bar:15}{r_bar}",  
+    file=sys.stderr,          
+)
+
 
 warnings.filterwarnings("ignore", category=UserWarning)
 log = logging.getLogger(__name__)
@@ -87,34 +93,48 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     avaCfg = cfg["avaDIRECTORY"]
     caseFolder = workflowUtils.caseFolderName(cfg)
 
-    workDir   = Path(cfg["MAIN"]["workDir"])
-    project   = cfg["MAIN"]["project"]
-    modelID   = cfg["MAIN"]["ID"]
+    workDir = Path(cfg["MAIN"]["workDir"])
+    project = cfg["MAIN"]["project"]
+    modelID = cfg["MAIN"]["ID"]
 
     # --- Core directories ---
     baseDir = workDir / project / modelID / "09_flowPyBigDataStructure" / caseFolder
-    avaDirData = Path(workFlowDir["avaDirDir"])  # 11_avaDirectoryData
+    avaDirData = Path(workFlowDir["avaDirDir"])      # 11_avaDirectoryData
     avaDirLib  = Path(workFlowDir["avaDirTypeDir"])  # 12_avaDirectory
     cairosDir  = Path(workFlowDir["cairosDir"])
 
-    log.info("Step 13: Using baseDir=%s", relPath(baseDir, cairosDir))
+    log.info("Step 13: Using baseDir=%s",    relPath(baseDir, cairosDir))
     log.info("Step 13: Using avaDirData=%s", relPath(avaDirData, cairosDir))
-    log.info("Step 13: Using avaDirLib=%s", relPath(avaDirLib, cairosDir))
+    log.info("Step 13: Using avaDirLib=%s",  relPath(avaDirLib, cairosDir))
 
     if not baseDir.exists():
         log.warning("Step 13: Expected FlowPy BigData directory does not exist: %s", relPath(baseDir, cairosDir))
         return
 
     # --- Behaviour flags ---
-    doProcess = avaCfg.getboolean("doProcess", True)
-    doSplit = avaCfg.getboolean("doSplit", True)
-    doMergeReljson = avaCfg.getboolean("doMergeReljson", True)
-    doEnrich = avaCfg.getboolean("doEnrich", True)
-    doExtractMetadata = avaCfg.getboolean("doExtractMetadata", True)
-    doClipRasters = avaCfg.getboolean("doClipRasters", True)
+    doProcess          = avaCfg.getboolean("doProcess", True)
+    doSplit            = avaCfg.getboolean("doSplit", True)  # legacy singleAva split
+    doMergeReljson     = avaCfg.getboolean("doMergeReljson", True)
+    doEnrich           = avaCfg.getboolean("doEnrich", True)
+    doExtractMetadata  = avaCfg.getboolean("doExtractMetadata", True)
+    doClipRasters      = avaCfg.getboolean("doClipRasters", True)
     doCollectSingleAva = avaCfg.getboolean("doCollectSingleAva", True)
-    maxClipWorkers = avaCfg.getint("maxClipWorkers", 4)
+    maxClipWorkers     = avaCfg.getint("maxClipWorkers", 4)
 
+    # --- New: output mode flags ---
+    writeSingleAvaGeoJSON = avaCfg.getboolean("writeSingleAvaGeoJSON", True)
+    writeScenarioParquet  = avaCfg.getboolean("writeScenarioParquet", False)
+
+    log.info(
+        "Step 13: Flags → doProcess=%s, doSplit=%s, doClipRasters=%s, maxClipWorkers=%d",
+        doProcess, doSplit, doClipRasters, maxClipWorkers
+    )
+    log.info(
+        "Step 13: Output mode → writeSingleAvaGeoJSON=%s, writeScenarioParquet=%s",
+        writeSingleAvaGeoJSON, writeScenarioParquet
+    )
+
+    # --- Discover PRA directories and apply single-test filter ---
     praDirs = sorted(baseDir.glob("pra*/"))
     praDirs = _filterSingleTestDirs(cfg, praDirs, "Step 13")
 
@@ -123,46 +143,94 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
         return
     log.info("Step 13: Found %d PRA directories", len(praDirs))
 
+    # --- Build global task list (for overall progress bar) ---
+    tasks = []
     for praDir in praDirs:
-        log.info("Step 13: Processing %s", relPath(praDir, cairosDir))
         for flowChoice in ["dry", "wet"]:
             pattern = os.path.join(praDir, f"Size*/{flowChoice}/Outputs/com4FlowPy")
             outputDirs = [p for p in glob.glob(pattern) if os.path.isdir(p)]
-            if not outputDirs:
+            for outputsDir in outputDirs:
+                tasks.append((praDir, flowChoice, outputsDir))
+
+    if not tasks:
+        log.warning("Step 13: No Outputs/com4FlowPy directories found under %s", relPath(baseDir, cairosDir))
+        return
+
+    log.info("Step 13: Prepared %d FlowPy scenarios (com4_* folders) for processing.", len(tasks))
+
+    lastPraDir = None
+    for praDir, flowChoice, outputsDir in tqdm(
+        tasks,
+        desc="Step 13: FlowPy → AvaDir",
+        unit="com4",
+    ):
+        if praDir is not None and praDir != lastPraDir:
+            log.info("Step 13: Processing %s", relPath(praDir, cairosDir))
+            lastPraDir = praDir
+
+        gdf, targetDir, resId = (None, None, None)
+        if doProcess:
+            gdf, targetDir, resId = processScenario(outputsDir, cairosDir)
+            if gdf is None:
                 continue
 
-            for outputsDir in outputDirs:
-                gdf, targetDir, resId = (None, None, None)
-                if doProcess:
-                    gdf, targetDir, resId = processScenario(outputsDir, cairosDir)
-                    if gdf is None:
-                        continue
-                reljsonPath = _findRelJson(outputsDir)
-                if doSplit and gdf is not None:
-                    splitGeojsonByPraId(
-                        gdf, targetDir, reljsonPath, doMergeReljson, cairosDir
-                    )
-                    if doEnrich or doExtractMetadata:
-                        for pf in glob.glob(os.path.join(targetDir, "praID*.geojson")):
-                            if doEnrich:
-                                enrichAvalancheFeature(pf, resId=resId, cairosDir=cairosDir)
-                            if doExtractMetadata:
-                                _attachScenarioMetadata(pf, cairosDir)
-                    if doClipRasters:
-                        clipRastersByMasks(
-                            maskDir=targetDir,
-                            outputsDir=outputsDir,
-                            outputDir=targetDir,
-                            cairosDir=cairosDir,
-                            max_workers=maxClipWorkers,
-                        )
+        reljsonPath = _findRelJson(outputsDir)
 
-    # --- Collect to Library directory ---
+        # --- Big-data mode: build one scenario table (res/rel rows per praID) and write GeoParquet ---
+        if writeScenarioParquet:
+            try:
+                scenGdf = buildScenarioGdf(
+                    gdf_res=gdf,
+                    reljsonPath=reljsonPath,
+                    doMergeReljson=doMergeReljson,
+                    resId=resId,
+                    doEnrich=doEnrich,
+                    doExtractMetadata=doExtractMetadata,
+                    outputsDir=outputsDir,
+                    cairosDir=cairosDir,
+                )
+
+                outName = f"avaScenLeaf_com4_{resId}.parquet"
+                outParquet = os.path.join(targetDir, outName)
+
+                scenGdf.to_parquet(outParquet, index=False)
+                log.info("Step 13: Wrote scenario parquet → %s", relPath(outParquet, cairosDir))
+            except Exception:
+                log.exception(
+                    "Step 13: Failed to write scenario parquet for %s",
+                    relPath(outputsDir, cairosDir),
+                )
+
+
+        # --- Legacy mode: split into many praID*.geojson ---
+        if writeSingleAvaGeoJSON and doSplit and gdf is not None:
+            splitGeojsonByPraId(gdf, targetDir, reljsonPath, doMergeReljson, cairosDir)
+
+            if doEnrich or doExtractMetadata:
+                for pf in glob.glob(os.path.join(targetDir, "praID*.geojson")):
+                    if doEnrich:
+                        enrichAvalancheFeature(pf, resId=resId, cairosDir=cairosDir)
+                    if doExtractMetadata:
+                        _attachScenarioMetadata(pf, cairosDir)
+
+            if doClipRasters:
+                clipRastersByMasks(
+                    maskDir=targetDir,
+                    outputsDir=outputsDir,
+                    outputDir=targetDir,
+                    cairosDir=cairosDir,
+                    max_workers=maxClipWorkers,
+                )
+
+        # If we are NOT writing singleAva GeoJSONs, raster clipping has no masks to use → skip
+        if (not writeSingleAvaGeoJSON) and doClipRasters:
+            log.info("Step 13: doClipRasters=True but writeSingleAvaGeoJSON=False → skipping raster clipping (no masks).")
+
+    # --- Collect to Library directory (copies com4_* folders) ---
     if doCollectSingleAva:
         collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir)
 
     log.info("Step 13: AvaDirectory build complete.")
-
 
 
 # ------------------ Function: processScenario ------------------ #
@@ -190,9 +258,139 @@ def processScenario(outputsDir, cairosDir):
         return None, None, resId
 
 
-# ------------------ Function: splitGeojsonByPraId ------------------ #
+# ------------------ Big-data helper: build scenario table ------------------ #
+def buildScenarioGdf(
+    gdf_res: gpd.GeoDataFrame,
+    reljsonPath: str | None,
+    doMergeReljson: bool,
+    resId: str | None,
+    doEnrich: bool,
+    doExtractMetadata: bool,
+    outputsDir: str,
+    cairosDir: Path,
+) -> gpd.GeoDataFrame:
+    """
+    Create a scenario-wide GeoDataFrame:
+      - one 'res' row per praID
+      - optional one 'rel' row per praID (if RELJSON exists and merge is enabled)
+    """
+    if gdf_res is None or gdf_res.empty:
+        return gpd.GeoDataFrame()
+
+    gdf_res = _normalize_ids(gdf_res)
+
+    # --- extract key from res ---
+    if "praID" in gdf_res.columns:
+        gdf_res["_key"] = gdf_res["praID"].apply(_extract_int_like)
+    elif "PRA_id" in gdf_res.columns:
+        gdf_res["_key"] = gdf_res["PRA_id"].apply(_extract_int_like)
+    else:
+        raise ValueError("No PRA_id/praID column in FlowPy results.")
+
+    # keep only first res geometry per key (matches legacy behaviour)
+    res_first = gdf_res.dropna(subset=["_key"]).groupby("_key", as_index=False).head(1).copy()
+    res_first["praID"] = res_first["_key"].astype(int)
+    res_first["modType"] = "res"
+
+    # --- merge reljson (optional) ---
+    rel_first = None
+    if doMergeReljson and reljsonPath and os.path.isfile(reljsonPath):
+        rel_gdf = _read_gdf(reljsonPath)
+        rel_gdf = _normalize_ids(rel_gdf)
+
+        if "praID" in rel_gdf.columns:
+            rel_gdf["_key"] = rel_gdf["praID"].apply(_extract_int_like)
+        elif "PRA_id" in rel_gdf.columns:
+            rel_gdf["_key"] = rel_gdf["PRA_id"].apply(_extract_int_like)
+        else:
+            log.warning("RELJSON %s has no praID/PRA_id column → skipping merge.", relPath(reljsonPath, cairosDir))
+            rel_gdf = None
+
+        if rel_gdf is not None and not rel_gdf.empty:
+            rel_first = rel_gdf.dropna(subset=["_key"]).groupby("_key", as_index=False).head(1).copy()
+            rel_first["praID"] = rel_first["_key"].astype(int)
+            rel_first["modType"] = "rel"
+
+            # union-copy rel attributes into res (legacy semantics)
+            rel_cols = set(rel_first.columns)
+            res_cols = set(res_first.columns)
+            union_cols = (rel_cols | res_cols) - {"geometry", "PRA_id", "Sector"}
+
+            for col in sorted(union_cols):
+                if col not in res_first.columns and col in rel_first.columns:
+                    res_first[col] = None
+
+            rel_map = rel_first.set_index("_key")
+
+            for idx, row in res_first.iterrows():
+                k = row["_key"]
+                if k not in rel_map.index:
+                    continue
+                for col in union_cols:
+                    if col in ("geometry", "PRA_id", "Sector"):
+                        continue
+                    if col in rel_map.columns:
+                        val = res_first.at[idx, col] if col in res_first.columns else None
+                        if val is None or (isinstance(val, float) and np.isnan(val)):
+                            res_first.at[idx, col] = rel_map.at[k, col]
+
+    # --- drop legacy helper cols ---
+    for df in (res_first, rel_first):
+        if df is None:
+            continue
+        drop_cols = [c for c in ("PRA_id", "Sector") if c in df.columns]
+        df.drop(columns=drop_cols, errors="ignore", inplace=True)
+
+    combined = [res_first]
+    if rel_first is not None and not rel_first.empty:
+        combined.append(rel_first)
+
+    out = gpd.GeoDataFrame(pd.concat(combined, ignore_index=True), crs=res_first.crs)
+
+    # --- enrich + metadata (scenario-wide, no per-file I/O) ---
+    if doEnrich and resId is not None:
+        out["resultID"] = str(resId)
+
+    if doExtractMetadata:
+        _attachScenarioMetadataToGdf(out, outputsDir)
+
+    # cleanup key
+    out.drop(columns=[c for c in ("_key",) if c in out.columns], inplace=True, errors="ignore")
+    return out
+
+
+def _attachScenarioMetadataToGdf(gdf: gpd.GeoDataFrame, outputsDir: str) -> None:
+    """Attach scenario metadata based on folder path (same logic as per-file extraction)."""
+    import re
+    path = str(outputsDir).replace("\\", "/")
+
+    m = re.search(r"subC(\d+)", path)
+    subC = int(m.group(1)) if m else None
+    sector = next((s for s in ["N", "E", "S", "W"] if f"sec{s}" in path), None)
+    m = re.search(r"(\d{4})-(\d{4,5})", path)
+    elevMin, elevMax = (int(m.group(1)), int(m.group(2))) if m else (None, None)
+    flow = "dry" if "/dry/" in path else "wet" if "/wet/" in path else None
+    m = re.search(r"-(\d)(?:/|$)", path)
+    ppm = int(m.group(1)) if m else None
+    m = re.search(r"Size(\d)", path)
+    pem = int(m.group(1)) if m else None
+    rSize = None
+    if ppm is not None and pem is not None:
+        diff = ppm - pem
+        rSize = max(1, 5 - diff)
+
+    gdf["subC"] = subC
+    gdf["sector"] = sector
+    gdf["elevMin"] = elevMin
+    gdf["elevMax"] = elevMax
+    gdf["flow"] = flow
+    gdf["ppm"] = ppm
+    gdf["pem"] = pem
+    gdf["rSize"] = rSize
+
+
+# ------------------ Legacy: splitGeojsonByPraId (unchanged) ------------------ #
 def splitGeojsonByPraId(gdf_res, targetDir, reljsonPath=None, doMergeReljson=True, cairosDir=None):
-    """Split merged FlowPy result GeoJSON by PRA ID and merge with RELJSON if available."""
     if gdf_res is None or gdf_res.empty:
         log.warning("Nothing to split in %s", relPath(targetDir, cairosDir))
         return
@@ -219,8 +417,7 @@ def splitGeojsonByPraId(gdf_res, targetDir, reljsonPath=None, doMergeReljson=Tru
             elif "PRA_id" in reljson_gdf.columns:
                 rel_key = reljson_gdf["PRA_id"]
             else:
-                log.warning("RELJSON %s has no praID/PRA_id column → skipping merge.",
-                            relPath(reljsonPath, cairosDir))
+                log.warning("RELJSON %s has no praID/PRA_id column → skipping merge.", relPath(reljsonPath, cairosDir))
                 rel_key = None
 
             if rel_key is not None:
@@ -245,25 +442,19 @@ def splitGeojsonByPraId(gdf_res, targetDir, reljsonPath=None, doMergeReljson=Tru
                 rel_feat = rel_lookup[k].iloc[[0]].copy()
                 rel_feat["modType"] = "rel"
 
-                # --- UNION COPY rel → res (fill any missing attrs) ---
                 rel_cols = set(rel_feat.columns)
                 res_cols = set(res_feat.columns)
                 union_cols = (rel_cols | res_cols) - {"geometry", "PRA_id", "Sector"}
 
                 for col in sorted(union_cols):
                     if col not in res_feat.columns and col in rel_feat.columns:
-                        # copy missing attribute from rel to res
                         res_feat[col] = rel_feat.iloc[0].get(col)
                     elif col in res_feat.columns and col in rel_feat.columns:
-                        # fill NaN or empty values in res with rel
                         val = res_feat.iloc[0].get(col)
                         if val is None or (isinstance(val, float) and np.isnan(val)):
                             res_feat.loc[res_feat.index[0], col] = rel_feat.iloc[0].get(col)
 
-                combined = gpd.GeoDataFrame(
-                    pd.concat([res_feat, rel_feat], ignore_index=True),
-                    crs=res_feat.crs
-                )
+                combined = gpd.GeoDataFrame(pd.concat([res_feat, rel_feat], ignore_index=True), crs=res_feat.crs)
             else:
                 combined = res_feat
 
@@ -276,9 +467,7 @@ def splitGeojsonByPraId(gdf_res, targetDir, reljsonPath=None, doMergeReljson=Tru
             log.exception("Failed to split/write praID%s", k)
 
 
-# ------------------ Function: enrichAvalancheFeature ------------------ #
 def enrichAvalancheFeature(praFile, resId=None, cairosDir=None):
-    """Add resultID and modType consistency to GeoJSON."""
     if not os.path.exists(praFile):
         return
     try:
@@ -294,12 +483,12 @@ def enrichAvalancheFeature(praFile, resId=None, cairosDir=None):
         log.exception("Failed to enrich avalanche feature %s", relPath(praFile, cairosDir))
 
 
-# ------------------ Function: attach metadata ------------------ #
 def _attachScenarioMetadata(praFile, cairosDir):
     import re
     try:
         gdf_pf = _read_gdf(praFile)
-        path = str(praFile)
+        path = str(praFile).replace("\\", "/")
+
         m = re.search(r"subC(\d+)", path)
         subC = int(m.group(1)) if m else None
         sector = next((s for s in ["N", "E", "S", "W"] if f"sec{s}" in path), None)
@@ -314,6 +503,7 @@ def _attachScenarioMetadata(praFile, cairosDir):
         if ppm is not None and pem is not None:
             diff = ppm - pem
             rSize = max(1, 5 - diff)
+
         gdf_pf["subC"] = subC
         gdf_pf["sector"] = sector
         gdf_pf["elevMin"] = elevMin
@@ -322,14 +512,13 @@ def _attachScenarioMetadata(praFile, cairosDir):
         gdf_pf["ppm"] = ppm
         gdf_pf["pem"] = pem
         gdf_pf["rSize"] = rSize
+
         _write_gdf(gdf_pf, praFile)
     except Exception:
         log.exception("Failed to extract metadata for %s", relPath(praFile, cairosDir))
 
 
-# ------------------ Function: clipRastersByMasks ------------------ #
 def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4):
-    """Clip FlowPy rasters to PRA masks using multiprocessing."""
     maskFiles = sorted(glob.glob(os.path.join(maskDir, "praID*.geojson")))
     if not maskFiles:
         log.warning("No PRA masks found in %s", relPath(maskDir, cairosDir))
@@ -353,10 +542,9 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
         try:
             with rasterio.Env(GDAL_CACHEMAX=512):
                 with rasterio.open(rasterFile) as src:
-                    rb = src.bounds
                     for mf in maskFiles:
                         feats = list(fiona.open(mf))
-                        geoms = [f["geometry"] for f in feats if not use_res_only or f["properties"].get("modType") == "res"]
+                        geoms = [f["geometry"] for f in feats if (not use_res_only) or f["properties"].get("modType") == "res"]
                         if not geoms:
                             continue
                         outName = f"praID{os.path.basename(mf).replace('.geojson','')}_{os.path.basename(rasterFile)}"
@@ -388,9 +576,7 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
     log.info("Wrote %d clipped rasters in %s", total, relPath(outputDir, cairosDir))
 
 
-# ------------------ Function: collectSingleAvaDirs ------------------ #
 def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
-    """Collect com4_* folders and export avaDirectory.csv to Library folder."""
     lastName = os.path.basename(str(baseDir).rstrip("/"))
     targetRoot = avaDirData / lastName
     libRoot = avaDirLib / lastName
@@ -413,6 +599,7 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
             except Exception:
                 log.exception("Failed to copy %s", relPath(src, cairosDir))
 
+    # keep legacy csv (small cases). You already have flags to disable CSV elsewhere.
     allRecords = []
     for com4Dir in sorted(glob.glob(os.path.join(targetRoot, "com4_*"))):
         for pf in glob.glob(os.path.join(com4Dir, "praID*.geojson")):
@@ -430,7 +617,7 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
         merged.to_csv(csvPath, index=False)
         log.info("Merged %d rows into %s", len(merged), relPath(csvPath, cairosDir))
     else:
-        log.warning("No praID*.geojson found to merge in %s", relPath(targetRoot, cairosDir))
+        log.info("No praID*.geojson found for legacy avaDirectory.csv creation (this is OK in parquet-only mode).")
 
 
 # ------------------ Helper utilities ------------------ #
@@ -462,10 +649,6 @@ def _extract_int_like(v):
         return int(float(v))
     except Exception:
         return None
-
-def _collectScenarioDirs(praDir):
-    return [os.path.join(praDir, d) for d in os.listdir(praDir)
-            if os.path.isdir(os.path.join(praDir, d)) and "-" in d and "sec" in d]
 
 def _findRelJson(outputsDir):
     flowDir = os.path.dirname(os.path.dirname(outputsDir))

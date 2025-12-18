@@ -462,7 +462,7 @@ if __name__ == "__main__":
     if success:
         log.info(
             "\n\n       ===============================================================================\n"
-            "                 ... AvaScenarioModelChain WORKFLOW DONE - completed in %.2fs ...\n"
+            "               ... AvaScenarioModelChain WORKFLOW DONE - completed in %.2fs ...\n"
             "       ===============================================================================\n",
             time.perf_counter() - t_all,
         )
