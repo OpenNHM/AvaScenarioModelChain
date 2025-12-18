@@ -115,18 +115,18 @@ def initWorkDir(config_or_path: Union[str, pathlib.Path, configparser.ConfigPars
         ("flowPyOutput",           "10_flowPyOutput"),
 
         # AvaDirectory chain
-        ("avaDir",           "11_avaDirectoryData"),  # Step 13
-        ("avaDirType",       "12_avaDirectory"),      # Step 14
-        ("avaDirResults",    "12_avaDirectory"),      # Step 15
-        ("avaDirIndex",      "12_avaDirectory"),      # cache/index file (.pkl)
+        ("avaDir",           "11_avaDirectoryData"),  
+        ("avaDirType",       "12_avaDirectory"),      
+        ("avaDirResults",    "12_avaDirectory"),      
+        ("avaDirIndex",      "12_avaDirectory"),     
 
         # Map/preview steps
         ("avaScenMaps",      "13_avaScenMaps"),
         ("avaScenPreview",   "14_avaScenPreview"),
 
         # Post-processing / support
-        ("plots",            "91_plots"),
-        ("gis",              "92_GIS"),
+        ("stats",            "90_stats"),
+        ("gis",              "91_gis"),
     ]
 
     # ----------------------------------------------------------------------
