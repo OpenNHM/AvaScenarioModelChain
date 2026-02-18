@@ -79,106 +79,39 @@ openNHM/
 
 ## Quick start (Linux)
 
-#### 1. Minimal system prerequisites
-* Keep system Python minimal
-* Everything runs inside Pixi
-* AvaFrame is linked in editable mode
+#### Prerequisites
+* Linux system
+* Git
+* Pixi
+* AvaFrame
+
+#### Setup
+* Clone AvaFrame and AvaScenariosModelChain into the same parent directory
+* Use AvaFrame branch `PS_FP_outputRelInfo`
+* AvaScenariosModelChain links AvaFrame in editable mode via Pixi
+
+
+#### Run
+* From the AvaScenariosModelChain repository root:
 
 ```bash
-# System-wide basics
-sudo apt update
-sudo apt install -y git python3 python3-pip
-
-# Install Pixi (recommended via installer script)
-curl -fsSL https://pixi.sh/install.sh | bash
-# restart your shell so `pixi` is in PATH
-```
-
-### 2) Install AvaFrame (temporary: dev branch)
-
-```bash
-# choose your workspace directory, e.g. ~/Documents/Applications
-cd ~/Documents/Applications
-
-# clone AvaFrame
-git clone https://github.com/avaframe/AvaFrame.git
-cd AvaFrame
-# checkout branch until next release (ATM)
-git checkout PS_FP_outputRelInfo
-```
-
-#### Two options from here:
-
-Option A: Use AvaFrame via AvaScenarioModelChain
-  - Nothing else required — AvaScenarioModelChain links AvaFrame in editable mode automatically through Pixi.
-  - Skip the manual build step.
-
-Option B: Use AvaFrame standalone
-  - If you want to run AvaFrame directly (outside AvaScenarioModelChain), you need to compile the Cython parts:
-
-```bash
-# set the avalanche dir in local_avaFrameCfg.py and apply your settungs to local_com4FlowPyCfg.ini
-cd AvaFrame
-pixi shell
-python setup.py build_ext --inplace
-# checkout branch until next release (ATM)
-git checkout PS_FP_outputRelInfo
-pixi shell -e dev
-cd AvaFrame/avaframe
-python runCom4FlowPy.py
-```
-  - Repeat this step whenever Cython code changes or after pulling new updates.
-
-### 3) Install AvaScenarioModelChain repo
-
-```bash
-# choose your workspace directory next to AvaFrame
-cd ~/Documents/Applications
-git clone https://github.com/OpenNHM/AvaScenarioModelChain.git AvaScenarioModelChain
-cd AvaScenarioModelChain
-```
-### 4) Setup AvaScenarioModelChain pixi env
-
-```bash
-# Clean any old envs if something is corrupted
-rm -f pixi.lock
-pixi clean -e dev || true
-#pixi clean cache || true
-rm -rf .pixi
-
-# Install dev env (with local AvaFrame)
 pixi install -e dev
-
-# Check that AvaScenarioModelChain uses your local AvaFrame
-pixi shell -e dev
-python -c "import avaframe, pathlib; print(pathlib.Path(avaframe.__file__).resolve())"
-> .../Documents/Applications/AvaFrame/avaframe/__init__.py
+pixi run -e dev modelchain
 ```
+* The workflow is controlled via: `local_avaScenModelChain.ini`
+* Activate or deactivate processing steps in the [WORKFLOW] section.
 
-### 5) Configure
+### Configure
 
 Copy the defaults and edit the **local** copies:
+* `local_avaScenModelChain.ini`
+* `local_avaframeCfg.ini`
+* `local_flowPyAvaFrameCfg.ini`
 
-```bash
-# ModelChain config
-cd AvaScenarioModelChain
-cp avaScenModelChain.ini local_avaScenModelChain.ini
-
-# AvaFrame config
-cd ../AvaFrame/avaframe
-cp avaframeCfg.ini local_avaframeCfg.ini
-
-# AvaFrame FlowPy config
-cd ../AvaFrame/avaframe/com2FlowPy
-cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
-```
 ---
 
 ## Running AvaScenarioModelChain ...
 
-- Fill in `local_avaScenModelChain.ini` → `[MAIN]` with your project info and input filenames (the files must exist in the run’s `00_input/` folder once the project is initialized).
-- Adapt your local_*Cfg.ini's
-- Details TBA....
 
 ```bash
 # ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -192,12 +125,7 @@ cp flowPyAvaFrameCfg.ini local_flowPyAvaFrameCfg.ini
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 #    ███████  A V A L A N C H E · S C E N E N A R I O · M O D E L · C H A I N  ████████
 # ───────────────────────────────────────────────────────────────────────────────────────────────
-```
 
-
-```bash
-cd Cairos/AvaScenarioModelChain #location of runAvaScenModelChain.py
-pixi run -e dev modelchain
 ```
 - after first initialzation run you see: 
 ```bash
@@ -245,22 +173,9 @@ ERROR:__main__:
 
 ```
 - Copy or prepare these files into your project’s `00_input/` directory.
-- Their filenames must match the entries defined in your INI’s `[MAIN]` section e.g:
-```bash
-[MAIN]
-DEM      = 10DTM_pilotSellaTest.tif
-FOREST   = 10nDOM_binAgg_100_pilotSellaTest_forestCom.tif
-BOUNDARY = regionPilotSella.geojson
-COMMISSIONREGION = commRegionExtentPilotSella.geojson
-COMMISSIONS = commissionsEuregio.geojson
-AVAREPORT = avaReportMicroRegions.geojson
-```
--  run again...
-```bash
-cd Cairos/AvaScenarioModelChain #location of runAvaScenModelChain.py
-pixi run -e dev modelchain
-```
+- Their filenames must match the entries defined in your INI’s `[MAIN]` section
 - when all input is provided and checked you will see: 
+
 ```bash
 ...
 INFO:__main__: Step 00: Project initialized in 0.01s
@@ -276,21 +191,7 @@ INFO:__main__: All inputs complete: /media/christoph/Daten/Cairos/ModelChainProc
 ... 
 ```
 
-### DEM-driven consistency rule
-- **NOTE**: All rasters (REL, RELID, ALPHA, UMAX, EXP, Outputs) must inherit:
-  - CRS, transform, and nodata from `[MAIN].DEM`
-- identical width/height for raster alignment
-- **Any deviation triggers a warning during preprocessing or FlowPy parameterization.**
 
-### Running a single leaf
-
-- Instead of enumerating the BigData tree, set in `[WORKFLOW]`:
-```ini
-#test only 
-makeSingleTestRun = False
-singleTestDir = pra030secE-1800-2000-4
-```
-- With this Step 09-15 will parameterize **that** leaf (`pra030secE-1800-2000-4`).
 ---
 
 ## What the workflow does (Steps 00–15)
@@ -421,50 +322,25 @@ singleTestDir = pra030secE-1800-2000-4
 ---
 
 ### Step 10 — Run FlowPy (per leaf)
-
-- **NOTE**: FlowPy is now executed directly through AvaFrame — there is no `runAvaScenModelChainFlowPy.py` anymore.
-
 - Driver: `AvaScenarioModelChain/runAvaScenModelChain.py`
-- FlowPy INI: `AvaFrame/avaframe/com4FlowPy/com4FlowPyCfg.ini`
+- FlowPy INI: `com4FlowPyCfg.ini`
   - Copy to `local_com4FlowPyCfg.ini` before editing
 
-Example FlowPy configuration used for AvaScenarioModelChain runs:
+Snipped of FlowPy configuration used for AvaScenarioModelChain runs:
 
 ```ini
 [GENERAL]
-infra = False
-previewMode = False
-variableUmaxLim = True              # important for AvaScenarioModelChain
-varUmaxParameter = uMax             # important for AvaScenarioModelChain
-variableAlpha = True                # important for AvaScenarioModelChain
-variableExponent = True             # important for AvaScenarioModelChain
-forest = False                      # important for AvaScenarioModelChain
+variableUmaxLim = True            
+varUmaxParameter = uMax        
+variableAlpha = True             
+variableExponent = True                        
 ...
-
-# computational defaults
-tileSize = 12000
-tileOverlap = 4000
-procPerCPUCore = 1
-chunkSize = 50
-maxChunks = 500
 
 [PATHS]
-outputFileFormat = .tif
-outputNoDataValue = -9999
-outputFiles = zDelta|travelLengthMax|fpTravelAngleMax|cellCounts|relIdPolygon
 useCustomPaths = False
-deleteTempFolder = True
-useCustomPathDEM = True             # important for AvaScenarioModelChain
-workDir =
-demPath = ...00_input/10DTM_pilotSellaTest.tif  # important for AvaScenarioModelChain
+useCustomPathDEM = True             
+demPath = path/to/DEM.tif
 ...
-
-[FLAGS]
-plotPath = False
-plotProfile = False
-saveProfile = True
-writeRes = True
-fullOut = False
 ```
 ### Step 11 — Back-map FlowPy outputs to size (optional)
 

@@ -64,5 +64,5 @@ GDAL_DISABLE_READDIR_ON_OPEN = "EMPTY_DIR"
 # which works for Bitbucket dev AND GitHub clones.
 # ----------------------------------------------------------------------
 [tool.pixi.feature.dev.pypi-dependencies]
-avaframe = { path = "../../AvaFrame", editable = true }
+avaframe = { path = "../AvaFrame", editable = true }
 
