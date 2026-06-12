@@ -1,5 +1,5 @@
 [project]
-name = "avaScenarioModelChain"
+name = "ati"
 description = "Avalanche Model Chain workflow (Preprocessing and PRA/Avalanche simulation pipeline)"
 requires-python = ">=3.9,<3.12"
 
@@ -7,7 +7,7 @@ requires-python = ">=3.9,<3.12"
 # Core Python dependencies
 # ----------------------------------------------------------------------
 dependencies = [
-    "numpy",
+    "numpy<2.0",
     "matplotlib",
     "shapely",
     "ConfigUpdater",
@@ -15,8 +15,15 @@ dependencies = [
     "whitebox",
     "pyarrow",
     "tqdm",
+    "scikit-image",
+    "pandas",
+    "fiona",
+
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 # ----------------------------------------------------------------------
 # Pixi PROJECT configuration
 # ----------------------------------------------------------------------
@@ -28,13 +35,14 @@ platforms = ["linux-64", "win-64", "osx-64"]
 # GDAL/Fiona/Rasterio/PROJ stack
 # ----------------------------------------------------------------------
 [tool.pixi.dependencies]
-python   = "3.11.*"
+python = ">=3.9,<3.14"
 proj     = "9.5.*"
 gdal     = "3.10.*"
-fiona    = "1.10.*"
-rasterio = "1.4.*"
 pyproj   = "3.7.*"
 pyarrow  = "*"
+numpy = "<2.0"
+black = "*"
+rasterio = "*"
 
 # ----------------------------------------------------------------------
 # Task entrypoint
@@ -42,27 +50,34 @@ pyarrow  = "*"
 [tool.pixi.tasks]
 modelchain = { cmd = "python runAvaScenModelChain.py", cwd = "." }
 
-# ----------------------------------------------------------------------
-# Environments
-# ----------------------------------------------------------------------
-[tool.pixi.environments]
-dev = { features = ["dev"] }
+[tool.pixi.feature.dev.dependencies]
+pytest = "*"
+
+
+# dev environment: editable cloned AvaFrame repo
+[tool.pixi.feature.dev.pypi-dependencies]
+avaframe = { path = "../../AvaFrame", editable = true }
+
+# default environment: pypi AvaFrame
+[tool.pixi.feature.prod.pypi-dependencies]
+avaframe = "*"
+
+[tool.black]
+line-length = 109
 
 # ----------------------------------------------------------------------
 # Environment variables for GDAL/Numba
 # ----------------------------------------------------------------------
 [tool.pixi.activation.env]
+PYTHONPATH = "${PIXI_PROJECT_ROOT}"
 NUMBA_CAPTURED_ERRORS        = "new_style"
 CPL_LOG                      = "/dev/null"
 GDAL_PAM_ENABLED             = "NO"
 GDAL_DISABLE_READDIR_ON_OPEN = "EMPTY_DIR"
 
+# Environments
 # ----------------------------------------------------------------------
-# LOCAL AvaFrame REQUIRED for this workflow
-# This points to:
-#   <repo_root>/../AvaFrame
-# which works for Bitbucket dev AND GitHub clones.
-# ----------------------------------------------------------------------
-[tool.pixi.feature.dev.pypi-dependencies]
-avaframe = { path = "../AvaFrame", editable = true }
-
+[tool.pixi.environments]
+default = { features = ["prod"], solve-group = "default" }
+prod = ["prod"]
+dev = ["dev"]
