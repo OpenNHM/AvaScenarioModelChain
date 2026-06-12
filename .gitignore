@@ -43,6 +43,8 @@ avaScenModelChainCfgs/
 *_results/
 *_plots/
 *_cache/
+Work
+ati/**/**/Outputs
 
 # --- Documentation / assets ---
 *.pdf
