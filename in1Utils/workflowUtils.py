@@ -242,7 +242,7 @@ def validateInputs(cfg, workFlowDir):
             continue
         fpath = inputDir / fname
         try:
-            dataUtils.enforceNumericNoData(fpath, fallback=-9999.0, force_epsg=25832)
+            dataUtils.enforceNumericNoData(fpath, fallback=-9999.0, force_epsg=26911)
             log.info("Step 00: Input %s validated: nodata + CRS check done.", label)
         except Exception:
             log.exception("Step 00: Failed to normalize %s: %s", label, fpath)
