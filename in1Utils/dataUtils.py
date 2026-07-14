@@ -342,7 +342,7 @@ def deleteTempFolder(folder_path: PathLike) -> int:
 # NoData handling & rasterization helpers
 # ----------------------------------------------------------------------
 
-def enforceNumericNoData(rasterPath: pathlib.Path, fallback: float = -9999.0, force_epsg: int = 25832) -> None:
+def enforceNumericNoData(rasterPath: pathlib.Path, fallback: float = -9999.0, force_epsg: int = 26911) -> None:
     """Ensure raster has numeric NoData and CRS normalized to EPSG code."""
     rasterPath = pathlib.Path(rasterPath)
     if not rasterPath.exists():
