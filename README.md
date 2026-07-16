@@ -351,35 +351,33 @@ INFO:__main__: All inputs complete: /media/christoph/Daten/Cairos/ModelChainProc
 
 ```text
 09_flowPyBigDataStructure/
-└── BnCh2_subC500_100_5_sizeF500/         ← Root: parameterized subcatchment/size case
-    ├── pra030secS-2000-2200-3/           ← Case: single PRA scenario (aspect/elev/size)
-    │   ├── Size2/
-    │   │   ├── dry/
-    │   │   │   ├── Inputs/
-    │   │   │   │   ├── REL/              ← Rasterized release masks (PRA polygons)
-    │   │   │   │   │   ├── pra030secS-2000-2200-3-praAreaM.tif
-    │   │   │   │   │   └── pra030secS-2000-2200-3-praBound.tif
-    │   │   │   │   ├── RELID/            ← PRA IDs encoded as integer rasters
-    │   │   │   │   │   └── pra030secS-2000-2200-3-praID.tif
-    │   │   │   │   ├── RELJSON/          ← PRA geometry + metadata (GeoJSON)
-    │   │   │   │   │   └── pra030secS-2000-2200-3.geojson
-    │   │   │   │   ├── ALPHA/            ← Computed FlowPy input (Step 09)
-    │   │   │   │   ├── UMAX/
-    │   │   │   │   ├── EXP/
-    │   │   │   │   └── DEM.tif           ← Optional local DEM reference (if enabled)
-    │   │   │   └── Outputs/
-    │   │   │       └── com4FlowPy/       ← FlowPy outputs (Step 10)
-    │   │   └── wet/
-    │   └── Size3/
-    │       └── dry/...
-    └── pra030secN-2200-2400-5/...
+├── pra030secS-2000-2200-3/               ← Case: single PRA scenario (aspect/elev/size)
+│   ├── Size2/
+│   │   ├── dry/
+│   │   │   ├── Inputs/
+│   │   │   │   ├── REL/                  ← Rasterized release masks (PRA polygons)
+│   │   │   │   │   ├── pra030secS-2000-2200-3-praAreaM.tif
+│   │   │   │   │   └── pra030secS-2000-2200-3-praBound.tif
+│   │   │   │   ├── RELID/                ← PRA IDs encoded as integer rasters
+│   │   │   │   │   └── pra030secS-2000-2200-3-praID.tif
+│   │   │   │   ├── RELJSON/              ← PRA geometry + metadata (GeoJSON)
+│   │   │   │   │   └── pra030secS-2000-2200-3.geojson
+│   │   │   │   ├── ALPHA/                ← Computed FlowPy input (Step 09)
+│   │   │   │   ├── UMAX/
+│   │   │   │   ├── EXP/
+│   │   │   │   └── DEM.tif               ← Optional local DEM reference (if enabled)
+│   │   │   └── Outputs/
+│   │   │       └── com4FlowPy/            ← FlowPy outputs (Step 10)
+│   │   └── wet/
+│   └── Size3/
+│       └── dry/...
+└── pra030secN-2200-2400-5/...
 ```
 
 ### Terminology & Naming Conventions
 
 | Term | Description |
 | ---- | ------------ |
-| **Root** | The main parameter-case folder (defined by `[praPROCESSING]`, `[praSUBCATCHMENTS]`, `[praSEGMENTATION]`). Example: `BnCh2_subC500_100_5_sizeF500` (constructed from default PRA parameters). |
 | **Case** | A single PRA release scenario, combining PRA ID, elevation range, and size. Formed from `[praDELINEATION]`, `[praSELECTION]`, `[praASSIGNELEV]`, `[avaPARAMETER]`. Example: `pra030secS-2000-2200-3`. |
 | **SizeN** | Size class folder derived from the case’s maximum potential size (`[avaPARAMETER]`.sizeRange). Example: `pra...-4` → `Size2`, `Size3`, `Size4`. |
 | **Scenario** | Flow regime folder: either `dry/` or `wet/`. |
@@ -460,10 +458,10 @@ FlowPy output, grouped per PRA and per size class.
 - Controlled by: 
   - `[WORKFLOW].avaDirBuildFromFlowPy`
 - Inputs: 
-  - `09_flowPyBigDataStructure/<caseFolder>/pra*/Size*/dry|wet/Outputs/com4FlowPy/`
+  - `09_flowPyBigDataStructure/pra*/Size*/dry|wet/Outputs/com4FlowPy/`
 - Outputs:
-  - `11_avaDirectoryData/<caseFolder>/com4_/praID.geojson` + rasters
-  - `11_avaDirectoryData/<caseFolder>/avaDirectory.csv`
+  - `11_avaDirectoryData/com4_/praID.geojson` + rasters
+  - `12_avaDirectory/avaDirectory.csv`
 
 ### Step 14 — Build AvaDirectory Type
 
@@ -476,11 +474,11 @@ FlowPy output, grouped per PRA and per size class.
 - Controlled by: 
   - `[WORKFLOW].avaDirType`
 - Inputs:
-  - `11_avaDirectoryData/<caseFolder>/com4_*/praID*.geojson`
+  - `11_avaDirectoryData/com4_*/praID*.geojson`
 - Outputs:
-  - `12_avaDirectory/<caseFolder>/avaDirectoryType.csv`
-  - `12_avaDirectory/<caseFolder>/avaDirectoryType.geojson`
-  - `12_avaDirectory/<caseFolder>/avaDirectoryType.parquet`
+  - `12_avaDirectory/avaDirectoryType.csv`
+  - `12_avaDirectory/avaDirectoryType.geojson`
+  - `12_avaDirectory/avaDirectoryType.parquet`
 
 ### Step 15 — Build AvaDirectory Results
 - Description:
@@ -494,13 +492,13 @@ FlowPy output, grouped per PRA and per size class.
 - Controlled by: 
   - `[WORKFLOW].avaDirResults`
 - Inputs:
-   - `12_avaDirectory/<caseFolder>/avaDirectoryType.parquet`
-   - `11_avaDirectoryData/<caseFolder>/com4_*/.tif
+   - `12_avaDirectory/avaDirectoryType.parquet`
+   - `11_avaDirectoryData/com4_*/*.tif`
 - Outputs:
-   - `12_avaDirectory/<caseFolder>/avaDirectoryResults.csv`
-   - `12_avaDirectory/<caseFolder>/avaDirectoryResults.geojson`
-   - `12_avaDirectory/<caseFolder>/avaDirectoryResults.parquet`
-   - `12_avaDirectory/<caseFolder>/indexAvaFiles.pkl`
+   - `12_avaDirectory/avaDirectoryResults.csv`
+   - `12_avaDirectory/avaDirectoryResults.geojson`
+   - `12_avaDirectory/avaDirectoryResults.parquet`
+   - `12_avaDirectory/indexAvaFiles.pkl`
 
 ### Summary:
 - Steps 09–15 form the complete FlowPy + AvaDirectory pipeline.
@@ -510,6 +508,4 @@ FlowPy output, grouped per PRA and per size class.
 - tbc...
 ---
 ## thats it for now - tbc...
-
-
 

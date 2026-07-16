@@ -17,7 +17,8 @@
 #     - BOUNDARY polygon (from [MAIN])
 #
 # Outputs :
-#     ./08_praPrepForFlowPy/<caseFolder>/
+#     Main model chain: ./08_praPrepForFlowPy/
+#     AvaFrame-directory workflow: <avaDir>/Work/praPrepForFlowPy/
 #         <band-size>_praID.geojson
 #         <band-size>_<attribute>.tif
 #         (optional) <band-size>_boundary.tif
@@ -87,14 +88,28 @@ def _parseRangeCsv(value: str):
     return lo, hi
 
 
+def _getSelectionElevationRange(cfg):
+    """Return a fallback elevation range from [praSELECTION] when available."""
+    if cfg.has_section("praSELECTION"):
+        selCfg = cfg["praSELECTION"]
+        minElev = selCfg.getint("minElev", fallback=None)
+        maxElev = selCfg.getint("maxElev", fallback=None)
+        if minElev is not None and maxElev is not None:
+            return float(minElev), float(maxElev)
+    return 0.0, 4000.0
+
+
 def loadElevationBands(cfg):
-    """Read elevation bands from [praASSIGNELEV]."""
+    """Read elevation bands from [praASSIGNELEV], or fall back to [praSELECTION]."""
     sect = cfg["praASSIGNELEV"]
     bands = []
     i = 1
     while True:
         key = f"elevationBand{i}"
         raw = sect.get(key, fallback=None)
+        if raw is None:
+            break
+        raw = str(raw).strip()
         if not raw:
             break
         lo, hi = _parseRangeCsv(raw)
@@ -104,23 +119,30 @@ def loadElevationBands(cfg):
         bands.append((label, (lo, hi)))
         i += 1
     if not bands:
-        raise ValueError("No elevation bands defined in [praASSIGNELEV].")
+        minElev, maxElev = _getSelectionElevationRange(cfg)
+        label = f"{int(round(minElev)):04d}-{int(round(maxElev)):04d}"
+        return [(label, (float(minElev), float(maxElev)))]
     return bands
 
 
 # ------------------ I/O discovery helpers ------------------ #
 
 
-def _ensureOutputSubfolder(praPrepForFlowPyDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter):
-    """Create ./08_praPrepForFlowPy/BnCh2_subC{thr}_{min}_{win}_sizeF{sizeF} and return its path."""
-    subfolderName = f"BnCh2_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
-    outDir = os.path.join(praPrepForFlowPyDir, subfolderName)
-    os.makedirs(outDir, exist_ok=True)
-    return subfolderName, outDir
-
-
-def _findStep07Inputs(praAssignElevSizeDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter):
+def _findStep07Inputs(
+    praAssignElevSizeDir,
+    streamThreshold,
+    minLength,
+    smoothingWindowSize,
+    sizeFilter,
+    flatLayout=False,
+):
     """Locate Step 06 outputs (*-ElevBands-Sized.geojson)."""
+    if flatLayout:
+        inDir = praAssignElevSizeDir
+        inFiles = sorted(glob.glob(os.path.join(inDir, "*-ElevBands-Sized.geojson")))
+        return inDir, inFiles
+
+    # Preserve the AvaFrame-directory layout used by runAutoAtesModelChain.py.
     subfolderName = f"BnCh2_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
     inDir = praAssignElevSizeDir / subfolderName
     inFiles = sorted(glob.glob(os.path.join(inDir, "*-ElevBands-Sized.geojson")))
@@ -317,17 +339,18 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
     log.info("Output: ./%s", relPath(praPrepForFlowPyDir, cairosDir))
     log.info("DEM: ./%s, Boundary: ./%s", relPath(demPath, cairosDir), relPath(boundPath, cairosDir))
 
-    # --- Create output subfolder ---
-    if workFlowDir is None:
-        outDir = praPrepForFlowPyDir
-    else:
-        _, outDir = _ensureOutputSubfolder(
-            praPrepForFlowPyDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter
-        )
+    # Write directly into the canonical Step 07 directory. This was already
+    # the behavior of the AvaFrame-directory workflow.
+    outDir = praPrepForFlowPyDir
 
     # --- Find Step 06 inputs ---
     inDir, inFiles = _findStep07Inputs(
-        praAssignElevSizeDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter
+        praAssignElevSizeDir,
+        streamThreshold,
+        minLength,
+        smoothingWindowSize,
+        sizeFilter,
+        flatLayout=workFlowDir is not None,
     )
     if not inFiles:
         log.error("Step 07: No Step 06 inputs found in ./%s", relPath(inDir, cairosDir))

@@ -183,6 +183,25 @@ def writeEffectiveConfig(cfg: configparser.ConfigParser,
     return outPath
 
 
+def writeEffectiveConfigJson(cfg: configparser.ConfigParser,
+                             cairosDir: Union[str, pathlib.Path],
+                             filename: str) -> pathlib.Path:
+    """Write the effective configuration as a section-keyed JSON document."""
+    cairosDir = pathlib.Path(cairosDir)
+    cairosDir.mkdir(parents=True, exist_ok=True)
+    outPath = cairosDir / filename
+
+    configData = {
+        section: dict(cfg[section].items())
+        for section in cfg.sections()
+    }
+    outPath.write_text(json.dumps(configData, indent=2), encoding="utf-8")
+
+    relPath = os.path.relpath(outPath, start=cairosDir)
+    log.info("effective config JSON written: ./%s", relPath)
+    return outPath
+
+
 def writeRunManifest(cairosDir: Union[str, pathlib.Path],
                      cfg: configparser.ConfigParser,
                      filename: str = "run_manifest.json",

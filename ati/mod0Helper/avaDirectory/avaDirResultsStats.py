@@ -8,7 +8,7 @@
 #     and basic distribution statistics.
 #
 # Inputs :
-#     - 12_avaDirectory/<caseFolder>/avaDirectoryResults.parquet
+#     - 12_avaDirectory/avaDirectoryResults.parquet
 #       (one or multiple locations / regions)
 #
 # Outputs :

@@ -43,11 +43,9 @@
 
 
 import os
-import sys
 import time
 import logging
 import warnings
-import contextlib
 from typing import cast
 import pathlib
 
@@ -98,18 +96,21 @@ def fixInvalidGeometries(shpPath: str) -> None:
     gdf.to_file(shpPath)  # type: ignore[attr-defined]
 
 
-@contextlib.contextmanager
-def suppressWbtOutput():
-    """Silence WhiteboxTools stdout."""
-    old_stdout = sys.stdout
-    try:
-        sys.stdout = open(os.devnull, "w")
-        yield
-    finally:
-        try:
-            sys.stdout.close()
-        finally:
-            sys.stdout = old_stdout
+def runWhiteboxTool(label, outputPath, tool, *args):
+    """Run a Whitebox tool and fail at the operation that did not create its output."""
+    messages = []
+    returnCode = tool(*args, callback=messages.append)
+    outputPath = pathlib.Path(outputPath)
+    if returnCode != 0 or not outputPath.exists():
+        details = "\n".join(str(message) for message in messages[-10:]).strip()
+        message = (
+            f"WhiteboxTools {label} failed (return code {returnCode}); "
+            f"expected output was not created: {outputPath}"
+        )
+        if details:
+            message = f"{message}\nWhiteboxTools output:\n{details}"
+        raise RuntimeError(message)
+    return outputPath
 
 
 def resolveDemPath(demValue, inputDir):
@@ -138,17 +139,15 @@ def prepHydroGrids(demPath, outDir, weightedSlopeFlow=False):
     slopeTif = buildPath(outDir, "slope.tif")
 
     with timeIt("Hydro prep (fill/d8/fac/slope)"):
-        with suppressWbtOutput():
-            wbt.fill_depressions(demPath, filledDem)
-            wbt.d8_pointer(filledDem, flowDir)
-            wbt.d8_flow_accumulation(filledDem, flowAcc)
-            wbt.slope(filledDem, slopeTif)
+        runWhiteboxTool("FillDepressions", filledDem, wbt.fill_depressions, demPath, filledDem)
+        runWhiteboxTool("D8Pointer", flowDir, wbt.d8_pointer, filledDem, flowDir)
+        runWhiteboxTool("D8FlowAccumulation", flowAcc, wbt.d8_flow_accumulation, filledDem, flowAcc)
+        runWhiteboxTool("Slope", slopeTif, wbt.slope, filledDem, slopeTif)
 
     if weightedSlopeFlow:
         log.debug("Using slope-weighted flow accumulation")
         weightedFlow = buildPath(outDir, "weighted_flow.tif")
-        with suppressWbtOutput():
-            wbt.multiply(flowAcc, slopeTif, weightedFlow)
+        runWhiteboxTool("Multiply", weightedFlow, wbt.multiply, flowAcc, slopeTif, weightedFlow)
         return filledDem, flowDir, weightedFlow, "_weighted"
 
     log.debug("Using unweighted flow accumulation")
@@ -199,45 +198,64 @@ def runParamSet(
     )
 
     # 1) Extract streams
+    streamsTif = buildPath(outDir, f"streams_{streamThreshold}.tif")
     with timeIt("Extract streams"):
-        with suppressWbtOutput():
-            wbt.extract_streams(
-                flowAccToUse,
-                buildPath(outDir, f"streams_{streamThreshold}.tif"),
-                streamThreshold,
-            )
+        runWhiteboxTool(
+            "ExtractStreams", streamsTif, wbt.extract_streams, flowAccToUse, streamsTif, streamThreshold
+        )
 
     # 2) Flow-based watershed delineation
+    junctionsTif = buildPath(outDir, f"junctions_{streamThreshold}.tif")
     with timeIt("Watershed delineation"):
-        with suppressWbtOutput():
-            wbt.stream_link_identifier(
-                flowDir,
-                buildPath(outDir, f"streams_{streamThreshold}.tif"),
-                buildPath(outDir, f"junctions_{streamThreshold}.tif"),
-            )
-            wbt.watershed(
-                flowDir,
-                buildPath(outDir, f"junctions_{streamThreshold}.tif"),
-                subcatchTif,
-            )
+        runWhiteboxTool(
+            "StreamLinkIdentifier",
+            junctionsTif,
+            wbt.stream_link_identifier,
+            flowDir,
+            streamsTif,
+            junctionsTif,
+        )
+        runWhiteboxTool("Watershed", subcatchTif, wbt.watershed, flowDir, junctionsTif, subcatchTif)
 
     # 3) Raster→Vector (raw)
     with timeIt("Raster→Vector (raw)"):
-        with suppressWbtOutput():
-            wbt.raster_to_vector_polygons(subcatchTif, subcatchShp)
+        runWhiteboxTool(
+            "RasterToVectorPolygons (raw)",
+            subcatchShp,
+            wbt.raster_to_vector_polygons,
+            subcatchTif,
+            subcatchShp,
+        )
         fixInvalidGeometries(subcatchShp)
 
     # 4) Smooth + Vectorize
     with timeIt("Smooth + Vectorize"):
-        with suppressWbtOutput():
-            wbt.majority_filter(subcatchTif, smoothSubcatchTif, smoothingWindowSize)
-            wbt.raster_to_vector_polygons(smoothSubcatchTif, smoothSubcatchShp)
+        runWhiteboxTool(
+            "MajorityFilter",
+            smoothSubcatchTif,
+            wbt.majority_filter,
+            subcatchTif,
+            smoothSubcatchTif,
+            smoothingWindowSize,
+        )
+        runWhiteboxTool(
+            "RasterToVectorPolygons (smoothed)",
+            smoothSubcatchShp,
+            wbt.raster_to_vector_polygons,
+            smoothSubcatchTif,
+            smoothSubcatchShp,
+        )
         fixInvalidGeometries(smoothSubcatchShp)
 
     # 5) Non-smoothed vector
     with timeIt("Non-smoothed vector"):
-        with suppressWbtOutput():
-            wbt.raster_to_vector_polygons(subcatchTif, nonSmoothSubcatchShp)
+        runWhiteboxTool(
+            "RasterToVectorPolygons (non-smoothed)",
+            nonSmoothSubcatchShp,
+            wbt.raster_to_vector_polygons,
+            subcatchTif,
+            nonSmoothSubcatchShp,
+        )
         fixInvalidGeometries(nonSmoothSubcatchShp)
 
     log.info("Saved subcatchments: %s", os.path.basename(smoothSubcatchShp))

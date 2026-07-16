@@ -7,10 +7,10 @@
 #     classification and visualization.
 #
 # Inputs :
-#     - 09_flowPyBigDataStructure/{caseFolder}/pra*/Size*/{dry,wet}/Outputs/com4FlowPy
+#     - 09_flowPyBigDataStructure/pra*/Size*/{dry,wet}/Outputs/com4FlowPy
 #
 # Outputs :
-#     - 11_avaDirectory/{caseFolder}/Map/singleAvaDir/
+#     - 11_avaDirectoryData/com4_*/
 #           com4_<scenario>/praID*.geojson
 #           runout rasters (e.g. fpTravel, fpMax, thickness …)
 #           avaDirectory.csv (global metadata index)
@@ -91,14 +91,12 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     log.info("Step 13: Start AvaDirectory build...")
 
     avaCfg = cfg["avaDIRECTORY"]
-    caseFolder = workflowUtils.caseFolderName(cfg)
-
     workDir = Path(cfg["MAIN"]["workDir"])
     project = cfg["MAIN"]["project"]
     modelID = cfg["MAIN"]["ID"]
 
     # --- Core directories ---
-    baseDir = workDir / project / modelID / "09_flowPyBigDataStructure" / caseFolder
+    baseDir = workDir / project / modelID / "09_flowPyBigDataStructure"
     avaDirData = Path(workFlowDir["avaDirDir"])  # 11_avaDirectoryData
     avaDirLib = Path(workFlowDir["avaDirTypeDir"])  # 12_avaDirectory
     cairosDir = Path(workFlowDir["cairosDir"])
@@ -123,6 +121,7 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     doClipRasters = avaCfg.getboolean("doClipRasters", True)
     doCollectSingleAva = avaCfg.getboolean("doCollectSingleAva", True)
     maxClipWorkers = avaCfg.getint("maxClipWorkers", 4)
+    subcatchmentThreshold = cfg["praSUBCATCHMENTS"].getint("streamThreshold", fallback=500)
 
     # --- New: output mode flags ---
     writeSingleAvaGeoJSON = avaCfg.getboolean("writeSingleAvaGeoJSON", True)
@@ -201,6 +200,7 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
                     doExtractMetadata=doExtractMetadata,
                     outputsDir=outputsDir,
                     cairosDir=cairosDir,
+                    subcatchmentThreshold=subcatchmentThreshold,
                 )
 
                 outName = f"avaScenLeaf_com4_{resId}.parquet"
@@ -226,7 +226,7 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
                     if doEnrich:
                         enrichAvalancheFeature(pf, resId=resId, cairosDir=cairosDir)
                     if doExtractMetadata:
-                        _attachScenarioMetadata(pf, cairosDir)
+                        _attachScenarioMetadata(pf, cairosDir, subcatchmentThreshold)
 
             if doClipRasters:
                 clipRastersByMasks(
@@ -291,6 +291,7 @@ def buildScenarioGdf(
     doExtractMetadata: bool,
     outputsDir: str,
     cairosDir: Path,
+    subcatchmentThreshold: int | None = None,
 ) -> gpd.GeoDataFrame:
     """
     Create a scenario-wide GeoDataFrame:
@@ -387,7 +388,7 @@ def buildScenarioGdf(
         out["resultID"] = str(resId)
 
     if doExtractMetadata:
-        _attachScenarioMetadataToGdf(out, outputsDir)
+        _attachScenarioMetadataToGdf(out, outputsDir, subcatchmentThreshold)
 
     # cleanup key
     out.drop(
@@ -398,14 +399,22 @@ def buildScenarioGdf(
     return out
 
 
-def _attachScenarioMetadataToGdf(gdf: gpd.GeoDataFrame, outputsDir: str) -> None:
+def _attachScenarioMetadataToGdf(
+    gdf: gpd.GeoDataFrame,
+    outputsDir: str,
+    subcatchmentThreshold: int | None = None,
+) -> None:
     """Attach scenario metadata based on folder path (same logic as per-file extraction)."""
     import re
 
     path = str(outputsDir).replace("\\", "/")
 
     m = re.search(r"subC(\d+)", path)
-    subC = int(m.group(1)) if m else None
+    subC = (
+        subcatchmentThreshold
+        if subcatchmentThreshold is not None
+        else (int(m.group(1)) if m else None)
+    )
     sector = next((s for s in ["N", "E", "S", "W"] if f"sec{s}" in path), None)
     m = re.search(r"(\d{4})-(\d{4,5})", path)
     elevMin, elevMax = (int(m.group(1)), int(m.group(2))) if m else (None, None)
@@ -536,7 +545,7 @@ def enrichAvalancheFeature(praFile, resId=None, cairosDir=None):
         )
 
 
-def _attachScenarioMetadata(praFile, cairosDir):
+def _attachScenarioMetadata(praFile, cairosDir, subcatchmentThreshold=None):
     import re
 
     try:
@@ -544,7 +553,11 @@ def _attachScenarioMetadata(praFile, cairosDir):
         path = str(praFile).replace("\\", "/")
 
         m = re.search(r"subC(\d+)", path)
-        subC = int(m.group(1)) if m else None
+        subC = (
+            subcatchmentThreshold
+            if subcatchmentThreshold is not None
+            else (int(m.group(1)) if m else None)
+        )
         sector = next((s for s in ["N", "E", "S", "W"] if f"sec{s}" in path), None)
         m = re.search(r"(\d{4})-(\d{4,5})", path)
         elevMin, elevMax = (int(m.group(1)), int(m.group(2))) if m else (None, None)
@@ -644,9 +657,8 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
 
 
 def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
-    lastName = os.path.basename(str(baseDir).rstrip("/"))
-    targetRoot = avaDirData / lastName
-    libRoot = avaDirLib / lastName
+    targetRoot = avaDirData
+    libRoot = avaDirLib
     targetRoot.mkdir(parents=True, exist_ok=True)
     libRoot.mkdir(parents=True, exist_ok=True)
     log.info("Collecting com4_* folders into %s", relPath(targetRoot, cairosDir))

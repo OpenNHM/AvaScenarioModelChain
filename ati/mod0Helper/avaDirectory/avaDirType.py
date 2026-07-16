@@ -8,12 +8,12 @@
 #     classification and filtering.
 #
 # Inputs :
-#     - 11_avaDirectoryData/<caseFolder>/com4_*/praID*.geojson
+#     - 11_avaDirectoryData/com4_*/praID*.geojson
 #
 # Outputs :
-#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.csv
-#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.geojson
-#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.parquet
+#     - 12_avaDirectory/avaDirectoryType.csv
+#     - 12_avaDirectory/avaDirectoryType.geojson
+#     - 12_avaDirectory/avaDirectoryType.parquet
 #       (format depends on configuration)
 #
 # Config :
@@ -102,11 +102,10 @@ def runAvaDirType(cfg, workFlowDir):
     avaCfg = cfg["avaDIRECTORY"]
 
     # --- Resolve directories dynamically ---
-    caseFolder = workflowUtils.caseFolderName(cfg)
     rootDir = Path(main["workDir"]) / main["project"] / main["ID"]
     cairosDir = Path(workFlowDir["cairosDir"])
 
-    avaDirLib = rootDir / "12_avaDirectory" / caseFolder
+    avaDirLib = rootDir / "12_avaDirectory"
     avaDirLib.mkdir(parents=True, exist_ok=True)
 
     # --- Mode flags ---
@@ -143,8 +142,8 @@ def runAvaDirType(cfg, workFlowDir):
 
     if readScenarioParquet:
         # Scenario parquet files are written by Step 13 into FlowPy folder tree:
-        # 09_flowPyBigDataStructure/<caseFolder>/pra*/Size*/{dry,wet}/Map/singleAvaDir/com4_*/avaScenario.parquet
-        flowPyRoot = rootDir / "09_flowPyBigDataStructure" / caseFolder
+        # 09_flowPyBigDataStructure/pra*/Size*/{dry,wet}/Map/singleAvaDir/com4_*/avaScenario.parquet
+        flowPyRoot = rootDir / "09_flowPyBigDataStructure"
         if not flowPyRoot.exists():
             log.error(
                 "Step 14: FlowPy root missing: %s", relPath(flowPyRoot, cairosDir)
@@ -165,8 +164,8 @@ def runAvaDirType(cfg, workFlowDir):
         log.info("Step 14: Found %d scenario parquet files", len(inputFiles))
 
     elif readSingleAvaGeoJSON:
-        # Legacy mode: read from 11_avaDirectoryData/<caseFolder>/com4_*/praID*.geojson
-        avaDirData = rootDir / "11_avaDirectoryData" / caseFolder
+        # Legacy mode: read from 11_avaDirectoryData/com4_*/praID*.geojson
+        avaDirData = rootDir / "11_avaDirectoryData"
         if not avaDirData.exists():
             log.warning(
                 "Step 14: Expected AvaDirectoryData missing: %s",

@@ -92,24 +92,40 @@ def loadSizeClasses(cfg):
     return sizeClasses
 
 
+def _getSelectionElevationRange(cfg):
+    """Return a fallback elevation range from [praSELECTION] when available."""
+    if cfg.has_section("praSELECTION"):
+        selCfg = cfg["praSELECTION"]
+        minElev = selCfg.getint("minElev", fallback=None)
+        maxElev = selCfg.getint("maxElev", fallback=None)
+        if minElev is not None and maxElev is not None:
+            return float(minElev), float(maxElev)
+    return 0.0, 4000.0
+
+
 def loadElevationBands(cfg):
-    """Read elevation bands from [praASSIGNELEV]."""
+    """Read elevation bands from [praASSIGNELEV], or fall back to [praSELECTION]."""
     sect = cfg["praASSIGNELEV"]
     bands = []
     i = 1
     while True:
         key = f"elevationBand{i}"
-        val = sect.get(key, fallback=None)
-        if not val:
+        raw = sect.get(key, fallback=None)
+        if raw is None:
             break
-        lo, hi = _parseRangeCsv(val)
+        raw = str(raw).strip()
+        if not raw:
+            break
+        lo, hi = _parseRangeCsv(raw)
         lo_i = int(round(lo))
         hi_i = int(round(hi if hi != float("inf") else 9999))
         label = f"{lo_i:04d}-{hi_i:04d}"
         bands.append((label, (lo, hi)))
         i += 1
     if not bands:
-        raise ValueError("No elevation bands defined in [praASSIGNELEV].")
+        minElev, maxElev = _getSelectionElevationRange(cfg)
+        label = f"{int(round(minElev)):04d}-{int(round(maxElev)):04d}"
+        return [(label, (float(minElev), float(maxElev)))]
     return bands
 
 
@@ -305,13 +321,11 @@ def runPraAssignElevSize(cfg, workFlowDir):
     filteredFiles, longSuffix = findFilteredGeojsons(
         praSegmentationDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter
     )
-    subfolderName = longSuffix.replace(".geojson", "").lstrip("_")
-    targetDir = os.path.join(praAssignElevSizeDir, subfolderName)
-    os.makedirs(targetDir, exist_ok=True)
+    targetDir = praAssignElevSizeDir
 
     log.info("Step 06: Start PRA elevation/size assignment...")
     log.info("Input: ./%s", relPath(praSegmentationDir, cairosDir))
-    log.info("Output: ./%s", relPath(targetDir, cairosDir))
+    log.info("Output (flat layout): ./%s", relPath(targetDir, cairosDir))
     log.info("DEM: ./%s", relPath(demPath, cairosDir))
 
     if not filteredFiles:

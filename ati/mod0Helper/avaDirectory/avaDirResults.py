@@ -7,12 +7,12 @@
 #     used for visualization, mapping, and statistical post-processing.
 #
 # Inputs :
-#     - 12_avaDirectory/<caseFolder>/avaDirectoryType.parquet
-#     - 11_avaDirectoryData/<caseFolder>/com4_*/   (FlowPy result rasters)
+#     - 12_avaDirectory/avaDirectoryType.parquet
+#     - 11_avaDirectoryData/com4_*/   (FlowPy result rasters)
 #
 # Outputs :
-#     - 12_avaDirectory/<caseFolder>/avaDirectoryResults.csv  | .geojson | .parquet
-#     - 12_avaDirectory/<caseFolder>/indexAvaFiles.pkl
+#     - 12_avaDirectory/avaDirectoryResults.csv  | .geojson | .parquet
+#     - 12_avaDirectory/indexAvaFiles.pkl
 #
 # Config :
 #     [avaDIRECTORY]
@@ -84,13 +84,12 @@ def runAvaDirResults(cfg, workFlowDir):
     main = cfg["MAIN"]
 
     # --- Resolve core directories dynamically ---
-    caseFolder = workflowUtils.caseFolderName(cfg)
     rootDir = Path(main["workDir"]) / main["project"] / main["ID"]
 
     # Source: FlowPy output rasters (raw data)
-    avaDirData = rootDir / "11_avaDirectoryData" / caseFolder
+    avaDirData = rootDir / "11_avaDirectoryData"
     # Destination: library of merged outputs
-    avaDirLib = rootDir / "12_avaDirectory" / caseFolder
+    avaDirLib = rootDir / "12_avaDirectory"
     # Ensure destination exists
     avaDirLib.mkdir(parents=True, exist_ok=True)
 
