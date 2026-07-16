@@ -65,22 +65,6 @@ def stepEnabled(flags, key: str, master: bool = False, default: bool = False) ->
     return True if master else flags.getboolean(key, fallback=default)
 
 
-def caseFolderName(cfg) -> str:
-    """Matches Step-08/09 naming convention, including optional '-praBound'."""
-    sub = cfg["praSUBCATCHMENTS"] if "praSUBCATCHMENTS" in cfg else {}
-    seg = cfg["praSEGMENTATION"] if "praSEGMENTATION" in cfg else {}
-    mk  = cfg["praMAKEBIGDATASTRUCTURE"] if "praMAKEBIGDATASTRUCTURE" in cfg else {}
-
-    streamThreshold     = int(sub.get("streamThreshold", 500))
-    minLength           = int(sub.get("minLength", 100))
-    smoothingWindowSize = int(sub.get("smoothingWindowSize", 5))
-    sizeFilter          = float(seg.get("sizeFilter", 500.0))
-    usePraBoundary      = str(mk.get("usePraBoundary", "False")).lower() in ("1","true","yes")
-
-    base = f"BnCh2_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
-    return base + "-praBound" if usePraBoundary else base
-
-
 def parseFlowTypes(val: str) -> list[str]:
     """Parse comma-separated flow type list."""
     v = (val or "").strip()
@@ -129,8 +113,7 @@ def discoverAvaDirs(cfg, workFlowDir):
     minWet = int(sect.get("minWetSizeClass", 2))
     maxWet = int(sect.get("maxWetSizeClass", 5))
 
-    parentCase = caseFolderName(cfg)
-    rootPath = pathlib.Path(workFlowDir["flowPyRunDir"]) / parentCase
+    rootPath = pathlib.Path(workFlowDir["flowPyRunDir"])
 
     if rootPath.exists():
         for case in sorted(p for p in rootPath.iterdir() if p.is_dir()):

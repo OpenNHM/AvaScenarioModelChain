@@ -14,11 +14,11 @@
 #
 # Inputs :
 #     - PRA rasters and GeoJSONs prepared in Step 07
-#       (./08_praPrepForFlowPy/<caseFolder>/*.tif / *.geojson)
+#       (./08_praPrepForFlowPy/*.tif / *.geojson)
 #
 # Outputs :
 #     - Fully structured FlowPy Big Data directory:
-#         ./09_flowPyBigDataStructure/<caseFolder>/
+#         ./09_flowPyBigDataStructure/
 #             pra<ID>-<elevRange>-<sizeClass>/SizeN/{dry,wet}/Inputs/{REL,RELID,RELJSON}/
 #
 # Config :
@@ -80,43 +80,27 @@ def timeIt(label, level=logging.DEBUG):
         log.log(level, "%s finished in %.2fs", label, time.perf_counter() - t0)
 
 
-def _subfolderName(streamThreshold, minLength, smoothingWindowSize, sizeFilter) -> str:
-    """Compose the standard Step-07 subfolder name."""
-    return f"BnCh2_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
-
-
-def _discoverInputFolder(
-    cfg, workFlowDir, usePraBoundary, streamThreshold, minLength, smoothingWindowSize, sizeFilter
-) -> str:
-    """Locate Step-07 output folder containing per-(band,size) files."""
+def _discoverInputFolder(workFlowDir) -> str:
+    """Return the flat Step-07 output directory containing per-(band,size) files."""
     cairosDir = workFlowDir["cairosDir"]
-    praPrepForFlowPyDir = workFlowDir.get("praPrepForFlowPyDir") or os.path.join(
+    return workFlowDir.get("praPrepForFlowPyDir") or os.path.join(
         cairosDir, "08_praPrepForFlowPy"
     )
-    subName = _subfolderName(streamThreshold, minLength, smoothingWindowSize, sizeFilter)
-    return os.path.join(praPrepForFlowPyDir, subName)
 
 
-def _ensureOutputRoot(
-    cfg, workFlowDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter, usePraBoundary
-):
-    """Ensure root output folder for BigData structure exists."""
+def _ensureOutputRoot(workFlowDir):
+    """Ensure and return the flat Step-08 output root."""
     cairosDir = workFlowDir["cairosDir"]
     bigDataRoot = workFlowDir.get("praMakeBigDataStructureDir") or os.path.join(
         cairosDir, "09_flowPyBigDataStructure"
     )
     os.makedirs(bigDataRoot, exist_ok=True)
-
-    base = _subfolderName(streamThreshold, minLength, smoothingWindowSize, sizeFilter)
-    folderName = base + "-praBound" if usePraBoundary else base
-    outCaseDir = os.path.join(bigDataRoot, folderName)
-    os.makedirs(outCaseDir, exist_ok=True)
-    return bigDataRoot, outCaseDir
+    return bigDataRoot
 
 
 def _iterTifs(inputFolder):
-    """Recursively list all .tif files."""
-    return sorted(glob.glob(os.path.join(inputFolder, "**", "*.tif"), recursive=True))
+    """List direct Step-07 TIFF outputs, ignoring obsolete nested layouts."""
+    return sorted(glob.glob(os.path.join(inputFolder, "*.tif")))
 
 
 def _extractSizeNumberFromBase(baseName: str) -> Optional[int]:
@@ -188,12 +172,8 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
 
     # --- Directories ---
     cairosDir = workFlowDir["cairosDir"]
-    inputFolder = _discoverInputFolder(
-        cfg, workFlowDir, usePraBoundary, streamThreshold, minLength, smoothingWindowSize, sizeFilter
-    )
-    _, outCaseDir = _ensureOutputRoot(
-        cfg, workFlowDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter, usePraBoundary
-    )
+    inputFolder = _discoverInputFolder(workFlowDir)
+    outCaseDir = _ensureOutputRoot(workFlowDir)
 
     log.info(
         "...MakeBigData using: in=./%s, out=./%s, streamThr=%s, minLen=%s, smoothWin=%s, sizeF=%s, usePraBoundary=%s",

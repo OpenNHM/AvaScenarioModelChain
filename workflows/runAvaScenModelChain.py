@@ -77,7 +77,7 @@ from ati.mod1Release import praPrepForFlowPy
 from ati.mod1Release import praMakeBigDataStructure
 
 
-import ati.mod0Helper.cfgUtils as cfgUtils
+import ati.mod0Helper.cfgUtils as atiCfgUtils
 import ati.mod2Mobility.compParams as compParams
 
 import ati.mod0Helper.workflowUtils as workflowUtils
@@ -145,7 +145,9 @@ def runAvaScenModelChainMain(workDir: str = "") -> bool:
 
     # --- Attach log file ---
     log_dir = workFlowDir["cairosDir"]
-    log_path = os.path.join(log_dir, f"runAvaScenModelChain_{time.strftime('%Y%m%d_%H%M%S')}.log")
+    run_timestamp = time.strftime("%Y%m%d_%H%M%S")
+    run_basename = f"runAvaScenModelChain_{run_timestamp}"
+    log_path = os.path.join(log_dir, f"{run_basename}.log")
     fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
     fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
@@ -154,6 +156,8 @@ def runAvaScenModelChainMain(workDir: str = "") -> bool:
     early_buf.flush()
     workflowUtils.closeEarlyBuffer(early_buf, root_logger)
     log.info("Step 00: Log file created at %s", os.path.relpath(log_path, start=log_dir))
+    config_path = atiCfgUtils.writeEffectiveConfigJson(cfg, log_dir, f"{run_basename}.json")
+    log.info("Step 00: Effective config saved at %s", os.path.relpath(config_path, start=log_dir))
 
     # --- Load full config ---
     if "WORKFLOW" not in cfg:
