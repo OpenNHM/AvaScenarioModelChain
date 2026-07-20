@@ -53,7 +53,20 @@ def timeIt(label, level=logging.DEBUG):
 
 
 def attachAreasMetersNoGeomChange(gdf: gpd.GeoDataFrame, demCrs) -> gpd.GeoDataFrame:
-    """Add planar area columns without changing the GeoDataFrame geometry or CRS."""
+    """Add planar area columns without changing geometry or CRS.
+
+    Parameters
+    ----------
+    gdf : geopandas.GeoDataFrame
+        Input geometries.
+    demCrs : pyproj.CRS
+        CRS used to calculate planar areas.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        Input data with ``area_m`` and ``area_km`` columns.
+    """
     try:
         if len(gdf) == 0:
             return gdf.assign(area_m=[], area_km=[])
@@ -112,7 +125,20 @@ def readRaster(path: PathLike, return_profile: bool = False) -> Tuple:
 
 
 def readGeoData(path: PathLike, columns=None) -> gpd.GeoDataFrame:
-    """Read a vector or GeoParquet dataset with optional column selection."""
+    """Read a vector or GeoParquet dataset.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Input dataset path.
+    columns : list, optional
+        Columns to read. By default, all columns are read.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        Loaded geospatial data.
+    """
     path = pathlib.Path(path)
     if path.suffix.lower() in (".parquet", ".geoparquet"):
         return gpd.read_parquet(path, columns=columns)
@@ -123,7 +149,17 @@ def readGeoData(path: PathLike, columns=None) -> gpd.GeoDataFrame:
 
 
 def writeGeoData(gdf: gpd.GeoDataFrame, path: PathLike, driver: str = "GeoJSON") -> None:
-    """Write a vector or GeoParquet dataset using the available backend."""
+    """Write a vector or GeoParquet dataset.
+
+    Parameters
+    ----------
+    gdf : geopandas.GeoDataFrame
+        Geospatial data to write.
+    path : str or pathlib.Path
+        Output dataset path.
+    driver : str, optional
+        Vector output driver. The default is ``GeoJSON``.
+    """
     path = pathlib.Path(path)
     if path.suffix.lower() in (".parquet", ".geoparquet"):
         gdf.to_parquet(path, index=False)

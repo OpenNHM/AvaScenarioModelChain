@@ -154,7 +154,23 @@ def parseIntRangeExpr(expr: str, default: Optional[List[int]] = None) -> List[in
 
 
 def parseRangeCsv(value: str):
-    """Parse a numeric ``low,high`` range, supporting ``inf`` as the upper bound."""
+    """Parse a numeric range from a comma-separated string.
+
+    Parameters
+    ----------
+    value : str
+        Range in ``low,high`` form. The upper value may be ``inf``.
+
+    Returns
+    -------
+    tuple
+        Lower and upper range limits as floats.
+
+    Raises
+    ------
+    ValueError
+        If the value does not contain exactly two limits.
+    """
     parts = [part.strip() for part in (value or "").strip().split(",")]
     if len(parts) != 2:
         raise ValueError(f"Invalid range definition: '{value}' (expected 'low,high')")
@@ -164,18 +180,42 @@ def parseRangeCsv(value: str):
 
 
 def _getSelectionElevationRange(cfg):
-    """Return the configured PRA-selection elevation range or its default."""
+    """Return the PRA-selection elevation range.
+
+    Parameters
+    ----------
+    cfg : configparser.ConfigParser
+        Model-chain configuration.
+
+    Returns
+    -------
+    tuple
+        Configured minimum and maximum elevations. If they are unavailable,
+        the range defaults to 0--8848 m.
+    """
     if cfg.has_section("praSELECTION"):
         selectionCfg = cfg["praSELECTION"]
         minElev = selectionCfg.getint("minElev", fallback=None)
         maxElev = selectionCfg.getint("maxElev", fallback=None)
         if minElev is not None and maxElev is not None:
             return float(minElev), float(maxElev)
-    return 0.0, 4000.0
+    return 0.0, 8848.0
 
 
 def loadElevationBands(cfg):
-    """Read elevation bands or fall back to the PRA-selection elevation range."""
+    """Load the configured elevation bands.
+
+    Parameters
+    ----------
+    cfg : configparser.ConfigParser
+        Model-chain configuration.
+
+    Returns
+    -------
+    list
+        Elevation-band labels and their numeric limits. If no bands are
+        defined, the PRA-selection elevation range is used.
+    """
     section = cfg["praASSIGNELEV"]
     bands = []
     index = 1

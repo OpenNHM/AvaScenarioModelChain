@@ -66,7 +66,6 @@ import avaframe.in3Utils.cfgUtils as cfgUtils
 import ati
 from ati.mod0Helper import dataUtils
 from ati.mod0Helper.cfgUtils import loadElevationBands
-from ati.mod0Helper.dataUtils import relPath, timeIt
 
 # ------------------ Logging setup ------------------ #
 
@@ -124,13 +123,13 @@ def _rasterizeAllVectors(outDir, demPath, boundPath, cfg, cairosDir):
 
     vecFiles = sorted(glob.glob(os.path.join(outDir, "*.geojson")))
     if not vecFiles:
-        log.warning("Step 07: No vector files to rasterize in ./%s", relPath(outDir, cairosDir))
+        log.warning("Step 07: No vector files to rasterize in ./%s", dataUtils.relPath(outDir, cairosDir))
         return 0, 0
 
     nOk = nFail = 0
     for vPath in vecFiles:
         try:
-            with timeIt(f"rasterize({os.path.basename(vPath)})"):
+            with dataUtils.timeIt(f"rasterize({os.path.basename(vPath)})"):
                 gdf = gpd.read_file(vPath)
 
                 # PRA raster
@@ -147,7 +146,7 @@ def _rasterizeAllVectors(outDir, demPath, boundPath, cfg, cairosDir):
                         compress=compress,
                         boundaryGdfDEM=boundaryGdfDEM,
                     )
-                    log.debug("    saved raster: ./%s", relPath(tifPath, cairosDir))
+                    log.debug("    saved raster: ./%s", dataUtils.relPath(tifPath, cairosDir))
                     nOk += 1
 
                 # PRA ID raster
@@ -165,12 +164,12 @@ def _rasterizeAllVectors(outDir, demPath, boundPath, cfg, cairosDir):
                         compress=compress,
                         boundaryGdfDEM=boundaryGdfDEM,
                     )
-                    log.debug("    saved raster (praID): ./%s", relPath(tifPraID, cairosDir))
+                    log.debug("    saved raster (praID): ./%s", dataUtils.relPath(tifPraID, cairosDir))
                     nOk += 1
 
         except Exception:
             nFail += 1
-            log.exception("Step 07: Rasterization failed for ./%s", relPath(vPath, cairosDir))
+            log.exception("Step 07: Rasterization failed for ./%s", dataUtils.relPath(vPath, cairosDir))
 
     return nOk, nFail
 
@@ -194,7 +193,10 @@ def _derivePraBoundaries(outDir, cfg, cairosDir):
 
     inTifs = sorted(glob.glob(os.path.join(outDir, "*.tif")))
     if not inTifs:
-        log.warning("Step 07: No input rasters for boundary derivation in ./%s", relPath(outDir, cairosDir))
+        log.warning(
+            "Step 07: No input rasters for boundary derivation in ./%s",
+            dataUtils.relPath(outDir, cairosDir),
+        )
         return 0, 0
 
     edgeKernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=np.uint8)
@@ -202,7 +204,7 @@ def _derivePraBoundaries(outDir, cfg, cairosDir):
     nOk = nFail = 0
     for tif in inTifs:
         try:
-            with timeIt(f"boundary({os.path.basename(tif)})"):
+            with dataUtils.timeIt(f"boundary({os.path.basename(tif)})"):
                 arr, prof = dataUtils.readRaster(tif, return_profile=True)
                 nodata = prof.get("nodata", -9999)
                 mask = (arr != nodata) & (arr != 0)
@@ -216,11 +218,11 @@ def _derivePraBoundaries(outDir, cfg, cairosDir):
                 dataUtils.saveRaster(
                     tif, outPath, out, dtype=arr.dtype, nodata=nodata, compress=("LZW" if compress else None)
                 )
-                log.debug("    saved boundary raster: ./%s", relPath(outPath, cairosDir))
+                log.debug("    saved boundary raster: ./%s", dataUtils.relPath(outPath, cairosDir))
                 nOk += 1
         except Exception:
             nFail += 1
-            log.exception("Step 07: Boundary derivation failed for ./%s", relPath(tif, cairosDir))
+            log.exception("Step 07: Boundary derivation failed for ./%s", dataUtils.relPath(tif, cairosDir))
 
     return nOk, nFail
 
@@ -275,9 +277,13 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
 
     # --- Log parameters ---
     log.info("Step 07: Start PRA → FlowPy preparation...")
-    log.info("Input: ./%s", relPath(praAssignElevSizeDir, cairosDir))
-    log.info("Output: ./%s", relPath(praPrepForFlowPyDir, cairosDir))
-    log.info("DEM: ./%s, Boundary: ./%s", relPath(demPath, cairosDir), relPath(boundPath, cairosDir))
+    log.info("Input: ./%s", dataUtils.relPath(praAssignElevSizeDir, cairosDir))
+    log.info("Output: ./%s", dataUtils.relPath(praPrepForFlowPyDir, cairosDir))
+    log.info(
+        "DEM: ./%s, Boundary: ./%s",
+        dataUtils.relPath(demPath, cairosDir),
+        dataUtils.relPath(boundPath, cairosDir),
+    )
 
     # Write directly into the canonical Step 07 directory. This was already
     # the behavior of the AvaFrame-directory workflow.
@@ -290,7 +296,7 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
         sizeFilter,
     )
     if not inFiles:
-        log.error("Step 07: No Step 06 inputs found in ./%s", relPath(inDir, cairosDir))
+        log.error("Step 07: No Step 06 inputs found in ./%s", dataUtils.relPath(inDir, cairosDir))
         log.info("Step 07 aborted (no inputs): %.2fs", time.perf_counter() - tAll)
         return
 
@@ -312,7 +318,9 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
     if zeroFeatureFiles:
         for fPath, combos in zeroFeatureFiles.items():
             log.warning(
-                "Step 07: zero-feature combos in ./%s: %s", relPath(fPath, cairosDir), ", ".join(combos)
+                "Step 07: zero-feature combos in ./%s: %s",
+                dataUtils.relPath(fPath, cairosDir),
+                ", ".join(combos),
             )
 
     # --- Step 2b: rename outputs (remove '-ElevBands-Sized') ---
