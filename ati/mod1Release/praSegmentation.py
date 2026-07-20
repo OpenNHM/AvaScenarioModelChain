@@ -47,11 +47,11 @@ import glob
 import time
 import logging
 import geopandas as gpd
-import numpy as np
 import pathlib
 
 import ati
 import ati.mod0Helper.dataUtils as dataUtils
+from ati.mod0Helper.cfgUtils import parseRangeCsv
 from ati.mod0Helper.dataUtils import timeIt, relPath
 
 import avaframe.in1Data.getInput as getInput
@@ -104,22 +104,12 @@ def ensureGeojsonVersion(src_path: str) -> str:
         raise
 
 
-def _parseRangeCsv(value: str):
-    v = (value or "").strip()
-    parts = [p.strip() for p in v.split(",")]
-    if len(parts) != 2:
-        raise ValueError(f"Invalid size class: '{value}' (expected 'low,high')")
-    lo = float(parts[0])
-    hi = float("inf") if parts[1].lower() == "inf" else float(parts[1])
-    return lo, hi
-
-
 def loadSizeClasses(cfg):
     sect = cfg["praSEGMENTATION"]
     sizeClasses = {}
     for i in range(1, 6):
         key = f"sizeClass{i}"
-        lo, hi = _parseRangeCsv(sect.get(key, fallback="0,inf"))
+        lo, hi = parseRangeCsv(sect.get(key, fallback="0,inf"))
         sizeClasses[i] = (lo, hi)
     return sizeClasses
 
@@ -132,27 +122,6 @@ def classifyAreasSqm(areasSqm, sizeClasses):
                 counts[cid] += 1
                 break
     return counts
-
-
-def attachAreasMetersNoGeomChange(gdf: gpd.GeoDataFrame, demCrs) -> gpd.GeoDataFrame:
-    """Compute areas (m², km²) without changing CRS."""
-    try:
-        if len(gdf) == 0:
-            return gdf.assign(area_m=[], area_km=[])
-        isProjected = getattr(demCrs, "is_projected", None)
-        if isProjected:
-            area_series = gdf.to_crs(demCrs).geometry.area
-        else:
-            try:
-                utm = gdf.estimate_utm_crs()
-                area_series = gdf.to_crs(utm).geometry.area
-            except Exception:
-                area_series = gdf.geometry.area
-        return gdf.assign(area_m=area_series.values, area_km=area_series.values / 1e6)  # type: ignore
-    except Exception:
-        log.exception("Area computation failed; writing zeros.")
-        z = np.zeros(len(gdf))
-        return gdf.assign(area_m=z, area_km=z / 1e6)
 
 
 def applySizeFilter(inputGeoPath, sizeFilter, outBasePath, cairosDir, sizeClasses):
@@ -203,7 +172,7 @@ def processSinglePraLayer(
 
             clipped = clipped.explode(index_parts=True).reset_index(drop=True)
             clipped = clipped[["geometry"]]
-            clipped = attachAreasMetersNoGeomChange(clipped, demCrs)
+            clipped = dataUtils.attachAreasMetersNoGeomChange(clipped, demCrs)
             classCounts = classifyAreasSqm(clipped["area_m"].astype(float).tolist(), sizeClasses)
 
             base = os.path.splitext(os.path.basename(inPath))[0]

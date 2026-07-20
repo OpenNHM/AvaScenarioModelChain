@@ -70,11 +70,6 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"pyogrio\..*"
 # ------------------ Utility Functions ------------------ #
 
 
-def ensureDir(path):
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
 def buildPath(dirPath, *names):
     return os.path.join(dirPath, *map(str, names))
 
@@ -111,21 +106,6 @@ def runWhiteboxTool(label, outputPath, tool, *args):
             message = f"{message}\nWhiteboxTools output:\n{details}"
         raise RuntimeError(message)
     return outputPath
-
-
-def resolveDemPath(demValue, inputDir):
-    cand = demValue.strip()
-    if os.path.isabs(cand) and os.path.exists(cand):
-        return cand
-    p1 = buildPath(inputDir, cand)
-    if os.path.exists(p1):
-        return p1
-    root, ext = os.path.splitext(cand)
-    if not ext:
-        p2 = buildPath(inputDir, cand + ".tif")
-        if os.path.exists(p2):
-            return p2
-    raise FileNotFoundError(f"DEM not found: {cand} under inputDir: {inputDir}")
 
 
 # ------------------ Hydro Prep ------------------ #

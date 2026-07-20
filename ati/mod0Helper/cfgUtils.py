@@ -153,6 +153,53 @@ def parseIntRangeExpr(expr: str, default: Optional[List[int]] = None) -> List[in
     return result or (default if default is not None else [])
 
 
+def parseRangeCsv(value: str):
+    """Parse a numeric ``low,high`` range, supporting ``inf`` as the upper bound."""
+    parts = [part.strip() for part in (value or "").strip().split(",")]
+    if len(parts) != 2:
+        raise ValueError(f"Invalid range definition: '{value}' (expected 'low,high')")
+    lower = float(parts[0])
+    upper = float("inf") if parts[1].lower() == "inf" else float(parts[1])
+    return lower, upper
+
+
+def _getSelectionElevationRange(cfg):
+    """Return the configured PRA-selection elevation range or its default."""
+    if cfg.has_section("praSELECTION"):
+        selectionCfg = cfg["praSELECTION"]
+        minElev = selectionCfg.getint("minElev", fallback=None)
+        maxElev = selectionCfg.getint("maxElev", fallback=None)
+        if minElev is not None and maxElev is not None:
+            return float(minElev), float(maxElev)
+    return 0.0, 4000.0
+
+
+def loadElevationBands(cfg):
+    """Read elevation bands or fall back to the PRA-selection elevation range."""
+    section = cfg["praASSIGNELEV"]
+    bands = []
+    index = 1
+    while True:
+        raw = section.get(f"elevationBand{index}", fallback=None)
+        if raw is None:
+            break
+        raw = str(raw).strip()
+        if not raw:
+            break
+        lower, upper = parseRangeCsv(raw)
+        lowerLabel = int(round(lower))
+        upperLabel = int(round(upper if upper != float("inf") else 9999))
+        bands.append((f"{lowerLabel:04d}-{upperLabel:04d}", (lower, upper)))
+        index += 1
+
+    if bands:
+        return bands
+
+    minElev, maxElev = _getSelectionElevationRange(cfg)
+    label = f"{int(round(minElev)):04d}-{int(round(maxElev)):04d}"
+    return [(label, (minElev, maxElev))]
+
+
 # ----------------------------------------------------------------------
 # Archiving helpers
 # ----------------------------------------------------------------------

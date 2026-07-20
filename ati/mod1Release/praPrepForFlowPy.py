@@ -59,13 +59,13 @@ import numpy as np
 import geopandas as gpd
 import pathlib
 
-import avaframe
 import avaframe.in1Data.getInput as getInput
 import avaframe.in3Utils.cfgUtils as cfgUtils
 
 
 import ati
 from ati.mod0Helper import dataUtils
+from ati.mod0Helper.cfgUtils import loadElevationBands
 from ati.mod0Helper.dataUtils import relPath, timeIt
 
 # ------------------ Logging setup ------------------ #
@@ -77,78 +77,21 @@ logging.getLogger("fiona").setLevel(logging.ERROR)
 # ------------------ Minimal helpers ------------------ #
 
 
-def _parseRangeCsv(value: str):
-    """Parse CSV-style numeric range string 'low,high' (supports 'inf')."""
-    v = (value or "").strip()
-    parts = [p.strip() for p in v.split(",")]
-    if len(parts) != 2:
-        raise ValueError(f"Invalid range definition: '{value}' (expected 'low,high')")
-    lo = float(parts[0])
-    hi = float("inf") if parts[1].lower() == "inf" else float(parts[1])
-    return lo, hi
-
-
-def _getSelectionElevationRange(cfg):
-    """Return a fallback elevation range from [praSELECTION] when available."""
-    if cfg.has_section("praSELECTION"):
-        selCfg = cfg["praSELECTION"]
-        minElev = selCfg.getint("minElev", fallback=None)
-        maxElev = selCfg.getint("maxElev", fallback=None)
-        if minElev is not None and maxElev is not None:
-            return float(minElev), float(maxElev)
-    return 0.0, 4000.0
-
-
-def loadElevationBands(cfg):
-    """Read elevation bands from [praASSIGNELEV], or fall back to [praSELECTION]."""
-    sect = cfg["praASSIGNELEV"]
-    bands = []
-    i = 1
-    while True:
-        key = f"elevationBand{i}"
-        raw = sect.get(key, fallback=None)
-        if raw is None:
-            break
-        raw = str(raw).strip()
-        if not raw:
-            break
-        lo, hi = _parseRangeCsv(raw)
-        lo_i = int(round(lo))
-        hi_i = int(round(hi if hi != float("inf") else 9999))
-        label = f"{lo_i:04d}-{hi_i:04d}"
-        bands.append((label, (lo, hi)))
-        i += 1
-    if not bands:
-        minElev, maxElev = _getSelectionElevationRange(cfg)
-        label = f"{int(round(minElev)):04d}-{int(round(maxElev)):04d}"
-        return [(label, (float(minElev), float(maxElev)))]
-    return bands
-
-
 # ------------------ I/O discovery helpers ------------------ #
 
 
 def _findStep07Inputs(
     praAssignElevSizeDir,
-    streamThreshold,
-    minLength,
-    smoothingWindowSize,
+    assignElevSize,
     sizeFilter,
-    flatLayout=False,
 ):
-    """Locate Step 06 outputs (*-ElevBands-Sized.geojson)."""
-    if flatLayout:
-        inDir = praAssignElevSizeDir
-        inFiles = sorted(glob.glob(os.path.join(inDir, "*-ElevBands-Sized.geojson")))
-        return inDir, inFiles
-
-    # Preserve the AvaFrame-directory layout used by runAutoAtesModelChain.py.
-    subfolderName = f"BnCh2_subC{streamThreshold}_{minLength}_{smoothingWindowSize}_sizeF{int(sizeFilter)}"
-    inDir = praAssignElevSizeDir / subfolderName
-    inFiles = sorted(glob.glob(os.path.join(inDir, "*-ElevBands-Sized.geojson")))
-    if not inDir.is_dir():
-        inDir = praAssignElevSizeDir
-        inFiles = sorted(glob.glob(os.path.join(inDir, "*sizeF500.geojson")))
+    """Locate flat Step 06 outputs for the selected workflow input type."""
+    inDir = pathlib.Path(praAssignElevSizeDir)
+    if assignElevSize:
+        pattern = "*-ElevBands-Sized.geojson"
+    else:
+        pattern = f"*sizeF{int(sizeFilter)}.geojson"
+    inFiles = sorted(glob.glob(os.path.join(inDir, pattern)))
     return inDir, inFiles
 
 
@@ -290,9 +233,6 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
     tAll = time.perf_counter()
 
     # --- Config parameters ---
-    streamThreshold = cfg["praSUBCATCHMENTS"].getint("streamThreshold", fallback=500)
-    minLength = cfg["praSUBCATCHMENTS"].getint("minLength", fallback=100)
-    smoothingWindowSize = cfg["praSUBCATCHMENTS"].getint("smoothingWindowSize", fallback=5)
     sizeFilter = cfg["praSEGMENTATION"].getfloat("sizeFilter", fallback=500.0)
 
     # --- Directories ---
@@ -346,11 +286,8 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
     # --- Find Step 06 inputs ---
     inDir, inFiles = _findStep07Inputs(
         praAssignElevSizeDir,
-        streamThreshold,
-        minLength,
-        smoothingWindowSize,
+        cfg["praPREPFORFLOWPY"].getboolean("assignElevSize"),
         sizeFilter,
-        flatLayout=workFlowDir is not None,
     )
     if not inFiles:
         log.error("Step 07: No Step 06 inputs found in ./%s", relPath(inDir, cairosDir))

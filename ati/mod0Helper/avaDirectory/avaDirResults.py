@@ -46,18 +46,11 @@ from pathlib import Path
 import pandas as pd
 import geopandas as gpd
 
+import ati.mod0Helper.dataUtils as dataUtils
 from ati.mod0Helper.dataUtils import relPath
-import ati.mod0Helper.workflowUtils as workflowUtils
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.WARNING)
-
-try:
-    import pyogrio
-
-    _HAS_PYOGRIO = True
-except Exception:
-    _HAS_PYOGRIO = False
 
 import sys
 from functools import partial
@@ -193,13 +186,6 @@ def runAvaDirResults(cfg, workFlowDir):
     return avaDir
 
 
-# ------------------ Helpers ------------------ #
-def _read_gdf(path: Path):
-    if _HAS_PYOGRIO and path.suffix == ".geojson":
-        return pyogrio.read_dataframe(path)
-    return gpd.read_file(path)
-
-
 def _buildFileIndex(avaDirData: Path, typePatterns: dict) -> dict:
     """Scan all com4_* folders and map raster paths by (praID, resultID)."""
     index = {}
@@ -287,7 +273,7 @@ def _makeAvaDirResults(
     if avaTypeParquet.exists():
         avaDir = gpd.read_parquet(avaTypeParquet)
     else:
-        avaDir = _read_gdf(avaTypeGeoJSON)
+        avaDir = dataUtils.readGeoData(avaTypeGeoJSON)
 
     # --- Cleanup ID fields ---
     if "resId" in avaDir.columns:

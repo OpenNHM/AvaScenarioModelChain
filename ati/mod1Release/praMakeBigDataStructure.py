@@ -52,33 +52,13 @@ import glob
 import time
 import shutil
 import logging
-import contextlib
 from typing import Optional
+
+from ati.mod0Helper.dataUtils import relPath, timeIt
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.ERROR)
 logging.getLogger("fiona").setLevel(logging.ERROR)
-
-# ------------------ Minimal helpers ------------------ #
-
-
-def relPath(path, cairosDir):
-    """Relative path helper for unified logging."""
-    try:
-        return os.path.relpath(path, start=cairosDir)
-    except Exception:
-        return path
-
-
-@contextlib.contextmanager
-def timeIt(label, level=logging.DEBUG):
-    """Context timer for consistent duration logs."""
-    t0 = time.perf_counter()
-    try:
-        yield
-    finally:
-        log.log(level, "%s finished in %.2fs", label, time.perf_counter() - t0)
-
 
 def _discoverInputFolder(workFlowDir) -> str:
     """Return the flat Step-07 output directory containing per-(band,size) files."""
@@ -112,25 +92,6 @@ def _extractSizeNumberFromBase(baseName: str) -> Optional[int]:
         except ValueError:
             return None
     return None
-
-
-def _makeCaseTreeForRaster(outCaseDir, folderBase, maxSize, minSize=2):
-    """
-    Create:
-      outCaseDir/<folderBase>/SizeN/{wet,dry}/Inputs/{REL,RELID,RELJSON}
-    """
-    caseRoot = os.path.join(outCaseDir, folderBase)
-    os.makedirs(caseRoot, exist_ok=True)
-    for size in range(minSize, maxSize + 1):
-        for flowType in ("wet", "dry"):
-            relDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "REL")
-            relIdDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELID")
-            relJsonDir = os.path.join(caseRoot, f"Size{size}", flowType, "Inputs", "RELJSON")
-            os.makedirs(relDir, exist_ok=True)
-            os.makedirs(relIdDir, exist_ok=True)
-            os.makedirs(relJsonDir, exist_ok=True)
-            log.debug("Created: %s, %s, %s", relDir, relIdDir, relJsonDir)
-    return caseRoot
 
 
 def _logDirectoryTree(baseDir, cairosDir, level=logging.INFO):

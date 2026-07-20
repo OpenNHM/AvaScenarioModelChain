@@ -56,6 +56,7 @@ import rasterio
 from rasterio.mask import mask
 
 import ati.mod0Helper.dataUtils as dataUtils
+from ati.mod0Helper.cfgUtils import loadElevationBands, parseRangeCsv
 from ati.mod0Helper.dataUtils import relPath, timeIt
 
 # ------------------ Logging setup ------------------ #
@@ -66,17 +67,6 @@ logging.getLogger("fiona").setLevel(logging.ERROR)
 
 # ------------------ Minimal helpers ------------------ #
 
-def _parseRangeCsv(value: str):
-    """Parse CSV-style numeric range string 'low,high' (supports 'inf')."""
-    v = (value or "").strip()
-    parts = [p.strip() for p in v.split(",")]
-    if len(parts) != 2:
-        raise ValueError(f"Invalid range definition: '{value}' (expected 'low,high')")
-    lo = float(parts[0])
-    hi = float("inf") if parts[1].lower() == "inf" else float(parts[1])
-    return lo, hi
-
-
 def loadSizeClasses(cfg):
     """Read size class ranges from [praSEGMENTATION]."""
     sect = cfg["praSEGMENTATION"]
@@ -85,48 +75,11 @@ def loadSizeClasses(cfg):
         key = f"sizeClass{i}"
         if not sect.get(key, fallback=None):
             continue
-        lo, hi = _parseRangeCsv(sect.get(key))
+        lo, hi = parseRangeCsv(sect.get(key))
         sizeClasses[i] = (lo, hi)
     if not sizeClasses:
         raise ValueError("No size classes defined in [praSEGMENTATION].")
     return sizeClasses
-
-
-def _getSelectionElevationRange(cfg):
-    """Return a fallback elevation range from [praSELECTION] when available."""
-    if cfg.has_section("praSELECTION"):
-        selCfg = cfg["praSELECTION"]
-        minElev = selCfg.getint("minElev", fallback=None)
-        maxElev = selCfg.getint("maxElev", fallback=None)
-        if minElev is not None and maxElev is not None:
-            return float(minElev), float(maxElev)
-    return 0.0, 4000.0
-
-
-def loadElevationBands(cfg):
-    """Read elevation bands from [praASSIGNELEV], or fall back to [praSELECTION]."""
-    sect = cfg["praASSIGNELEV"]
-    bands = []
-    i = 1
-    while True:
-        key = f"elevationBand{i}"
-        raw = sect.get(key, fallback=None)
-        if raw is None:
-            break
-        raw = str(raw).strip()
-        if not raw:
-            break
-        lo, hi = _parseRangeCsv(raw)
-        lo_i = int(round(lo))
-        hi_i = int(round(hi if hi != float("inf") else 9999))
-        label = f"{lo_i:04d}-{hi_i:04d}"
-        bands.append((label, (lo, hi)))
-        i += 1
-    if not bands:
-        minElev, maxElev = _getSelectionElevationRange(cfg)
-        label = f"{int(round(minElev)):04d}-{int(round(maxElev)):04d}"
-        return [(label, (float(minElev), float(maxElev)))]
-    return bands
 
 
 def assignElevationBand(row, bands):
@@ -140,26 +93,6 @@ def assignElevationBand(row, bands):
             if (emean >= lo) and (emean < hi):
                 return label, "mean"
     return "Unknown", "None"
-
-
-def attachAreasMetersNoGeomChange(gdf, demCrs):
-    """Compute planar area (m² / km²) without modifying geometry."""
-    try:
-        if len(gdf) == 0:
-            return gdf.assign(area_m=[], area_km=[])
-        if getattr(demCrs, "is_projected", None) is True:
-            areaSeries = gdf.to_crs(demCrs).geometry.area
-        else:
-            try:
-                utm = gdf.estimate_utm_crs()
-                areaSeries = gdf.to_crs(utm).geometry.area
-            except Exception:
-                areaSeries = gdf.geometry.area
-        return gdf.assign(area_m=areaSeries.values, area_km=(areaSeries.values / 1e6))
-    except Exception:
-        log.exception("Area computation failed; writing zeros (geometry unchanged).")
-        z = np.zeros(len(gdf))
-        return gdf.assign(area_m=z, area_km=z / 1e6)
 
 
 # ------------------ File discovery & naming ------------------ #
@@ -342,7 +275,7 @@ def runPraAssignElevSize(cfg, workFlowDir):
                 gdf = gpd.read_file(inPath)
 
                 if "area_m" not in gdf.columns:
-                    gdf = attachAreasMetersNoGeomChange(gdf[["geometry"]].copy(), demCrs)
+                    gdf = dataUtils.attachAreasMetersNoGeomChange(gdf[["geometry"]].copy(), demCrs)
                 else:
                     gdf = gdf[["geometry", "area_m"]]
 

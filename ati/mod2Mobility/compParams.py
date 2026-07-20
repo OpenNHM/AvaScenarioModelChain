@@ -28,31 +28,6 @@ def _rel(path: Union[str, pathlib.Path], base: pathlib.Path) -> str:
         return str(path)
 
 
-def _resolve_dem_path(
-    ava_dir: pathlib.Path,
-    cfg_ava_param,
-    dem_override: Optional[Union[str, pathlib.Path]] = None,
-) -> pathlib.Path:
-    """
-    Resolve DEM path with simple precedence:
-    1) dem_override if provided
-    2) [avaPARAMETER].customDemDir = True -> demDir
-    3) AvaFrame structure -> <avaDir>/Inputs/DEM.tif
-    (Left here for convenience; the main function keeps the original DEM logic.)
-    """
-    if dem_override:
-        return pathlib.Path(dem_override)
-
-    if cfg_ava_param.getboolean("customDemDir", fallback=False):
-        dem_dir = (cfg_ava_param.get("demDir", "") or "").strip()
-        if not dem_dir:
-            raise ValueError("customDemDir=True but [avaPARAMETER].demDir is empty")
-        return pathlib.Path(dem_dir)
-
-    # Default: DEM inside AvaFrame Inputs
-    return ava_dir / "Inputs" / "DEM.tif"
-
-
 # ────────────────────────────────────────────────────────────────────────────
 # Backward- & forward-compatible parameter computation
 # ────────────────────────────────────────────────────────────────────────────

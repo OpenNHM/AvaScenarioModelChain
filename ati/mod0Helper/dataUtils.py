@@ -17,6 +17,13 @@ from rasterio.features import rasterize
 from rasterio.errors import RasterioIOError
 import geopandas as gpd
 
+try:
+    import pyogrio
+
+    _HAS_PYOGRIO = True
+except Exception:
+    _HAS_PYOGRIO = False
+
 import ati.mod0Helper.cfgUtils as cfgUtils
 
 log = logging.getLogger(__name__)
@@ -43,6 +50,25 @@ def timeIt(label, level=logging.DEBUG):
         yield
     finally:
         log.log(level, "%s finished in %.2fs", label, time.perf_counter() - t0)
+
+
+def attachAreasMetersNoGeomChange(gdf: gpd.GeoDataFrame, demCrs) -> gpd.GeoDataFrame:
+    """Add planar area columns without changing the GeoDataFrame geometry or CRS."""
+    try:
+        if len(gdf) == 0:
+            return gdf.assign(area_m=[], area_km=[])
+        if getattr(demCrs, "is_projected", None):
+            areaSeries = gdf.to_crs(demCrs).geometry.area
+        else:
+            try:
+                areaSeries = gdf.to_crs(gdf.estimate_utm_crs()).geometry.area
+            except Exception:
+                areaSeries = gdf.geometry.area
+        return gdf.assign(area_m=areaSeries.values, area_km=areaSeries.values / 1e6)
+    except Exception:
+        log.exception("Area computation failed; writing zeros without changing geometry.")
+        zeros = np.zeros(len(gdf))
+        return gdf.assign(area_m=zeros, area_km=zeros / 1e6)
 
 
 # ----------------------------------------------------------------------
@@ -83,6 +109,28 @@ def readRaster(path: PathLike, return_profile: bool = False) -> Tuple:
         return (arr, prof) if return_profile else (arr, files[0])
 
     raise FileNotFoundError(f"{p} is not a valid file or folder")
+
+
+def readGeoData(path: PathLike, columns=None) -> gpd.GeoDataFrame:
+    """Read a vector or GeoParquet dataset with optional column selection."""
+    path = pathlib.Path(path)
+    if path.suffix.lower() in (".parquet", ".geoparquet"):
+        return gpd.read_parquet(path, columns=columns)
+    if _HAS_PYOGRIO:
+        return pyogrio.read_dataframe(path, columns=columns)
+    kwargs = {"columns": columns} if columns is not None else {}
+    return gpd.read_file(path, **kwargs)
+
+
+def writeGeoData(gdf: gpd.GeoDataFrame, path: PathLike, driver: str = "GeoJSON") -> None:
+    """Write a vector or GeoParquet dataset using the available backend."""
+    path = pathlib.Path(path)
+    if path.suffix.lower() in (".parquet", ".geoparquet"):
+        gdf.to_parquet(path, index=False)
+    elif _HAS_PYOGRIO:
+        pyogrio.write_dataframe(gdf, path, driver=driver)
+    else:
+        gdf.to_file(path, driver=driver)
 
 
 def saveRaster(
