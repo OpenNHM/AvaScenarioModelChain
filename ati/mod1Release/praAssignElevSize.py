@@ -57,7 +57,6 @@ from rasterio.mask import mask
 
 import ati.mod0Helper.dataUtils as dataUtils
 from ati.mod0Helper.cfgUtils import loadElevationBands, parseRangeCsv
-from ati.mod0Helper.dataUtils import relPath, timeIt
 
 # ------------------ Logging setup ------------------ #
 
@@ -257,13 +256,13 @@ def runPraAssignElevSize(cfg, workFlowDir):
     targetDir = praAssignElevSizeDir
 
     log.info("Step 06: Start PRA elevation/size assignment...")
-    log.info("Input: ./%s", relPath(praSegmentationDir, cairosDir))
-    log.info("Output (flat layout): ./%s", relPath(targetDir, cairosDir))
-    log.info("DEM: ./%s", relPath(demPath, cairosDir))
+    log.info("Input: ./%s", dataUtils.relPath(praSegmentationDir, cairosDir))
+    log.info("Output (flat layout): ./%s", dataUtils.relPath(targetDir, cairosDir))
+    log.info("DEM: ./%s", dataUtils.relPath(demPath, cairosDir))
 
     if not filteredFiles:
         log.error("No filtered GeoJSONs found matching *%s in ./%s",
-                  longSuffix, relPath(praSegmentationDir, cairosDir))
+                  longSuffix, dataUtils.relPath(praSegmentationDir, cairosDir))
         return
 
     nOk = nFail = totalPolys = 0
@@ -271,7 +270,7 @@ def runPraAssignElevSize(cfg, workFlowDir):
     for inPath in filteredFiles:
         try:
             short = simplifiedBasename(inPath, longSuffix)
-            with timeIt(f"assignElevSize({short})"):
+            with dataUtils.timeIt(f"assignElevSize({short})"):
                 gdf = gpd.read_file(inPath)
 
                 if "area_m" not in gdf.columns:
@@ -310,11 +309,15 @@ def runPraAssignElevSize(cfg, workFlowDir):
 
                 nOk += 1
                 totalPolys += len(gdfFinal)
-                log.info("Processed ./%s → ./%s", relPath(inPath, cairosDir), relPath(outFinal, cairosDir))
+                log.info(
+                    "Processed ./%s → ./%s",
+                    dataUtils.relPath(inPath, cairosDir),
+                    dataUtils.relPath(outFinal, cairosDir),
+                )
 
         except Exception:
             nFail += 1
-            log.exception("Step 06 failed for ./%s", relPath(inPath, cairosDir))
+            log.exception("Step 06 failed for ./%s", dataUtils.relPath(inPath, cairosDir))
 
     log.info("Step 06 complete: files_ok=%d, files_failed=%d, total_polys=%d", nOk, nFail, totalPolys)
     log.info("Step 06 total time: %.2fs", time.perf_counter() - tAll)

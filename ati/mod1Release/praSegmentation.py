@@ -52,7 +52,6 @@ import pathlib
 import ati
 import ati.mod0Helper.dataUtils as dataUtils
 from ati.mod0Helper.cfgUtils import parseRangeCsv
-from ati.mod0Helper.dataUtils import timeIt, relPath
 
 import avaframe.in1Data.getInput as getInput
 import avaframe.in3Utils.cfgUtils as cfgUtils
@@ -96,7 +95,7 @@ def ensureGeojsonVersion(src_path: str) -> str:
         gdf.to_file(geojson_path, driver="GeoJSON")
         log.info(
             "Converted subcatchments shapefile to GeoJSON: ./%s",
-            relPath(geojson_path, os.getcwd()),
+            dataUtils.relPath(geojson_path, os.getcwd()),
         )
         return geojson_path
     except Exception:
@@ -139,7 +138,7 @@ def applySizeFilter(inputGeoPath, sizeFilter, outBasePath, cairosDir, sizeClasse
         "...size filter %.0f m² → kept=%d, out=./%s",
         sizeFilter,
         len(gdfFiltered),
-        relPath(outGeo, cairosDir),
+        dataUtils.relPath(outGeo, cairosDir),
     )
     return len(gdfFiltered), outGeo, filteredClasses
 
@@ -160,14 +159,14 @@ def processSinglePraLayer(
 ):
     """Overlay PRA × subcatchments; compute areas and save GeoJSON."""
     try:
-        with timeIt(f"processSinglePraLayer({os.path.basename(inPath)})"):
+        with dataUtils.timeIt(f"processSinglePraLayer({os.path.basename(inPath)})"):
             praGdf = gpd.read_file(inPath)
 
             subcUse = subcatchGdf.to_crs(praGdf.crs) if subcatchGdf.crs != praGdf.crs else subcatchGdf
             clipped = gpd.overlay(praGdf, subcUse, how="intersection", keep_geom_type=True)
 
             if clipped.empty:
-                log.debug("No intersection for ./%s", relPath(inPath, cairosDir))
+                log.debug("No intersection for ./%s", dataUtils.relPath(inPath, cairosDir))
                 return None, 0, 0.0, {k: 0 for k in sizeClasses}
 
             clipped = clipped.explode(index_parts=True).reset_index(drop=True)
@@ -184,12 +183,12 @@ def processSinglePraLayer(
 
             log.info(
                 "Segmented PRA → ./%s (%d polys)",
-                relPath(outPath, cairosDir),
+                dataUtils.relPath(outPath, cairosDir),
                 len(clipped),
             )
             return outPath, len(clipped), float(clipped["area_m"].sum()), classCounts
     except Exception:
-        log.exception("Segmentation failed for ./%s", relPath(inPath, cairosDir))
+        log.exception("Segmentation failed for ./%s", dataUtils.relPath(inPath, cairosDir))
         return None, 0, 0.0, {k: 0 for k in sizeClasses}
 
 
@@ -255,15 +254,15 @@ def runPraSegmentation(cfg, workFlowDir=None, avaDir=None):
 
     log.info(
         "Step 05: PRA segmentation → out=./%s, SubC=./%s",
-        relPath(praSegmentationDir, cairosDir),
-        relPath(subcatchPath, cairosDir),
+        dataUtils.relPath(praSegmentationDir, cairosDir),
+        dataUtils.relPath(subcatchPath, cairosDir),
     )
 
     if not praFiles:
-        log.error("No PRA GeoJSONs found in ./%s", relPath(praProcessingDir, cairosDir))
+        log.error("No PRA GeoJSONs found in ./%s", dataUtils.relPath(praProcessingDir, cairosDir))
         return
     if not os.path.exists(subcatchPath):
-        log.error("Subcatchments file missing: ./%s", relPath(subcatchPath, cairosDir))
+        log.error("Subcatchments file missing: ./%s", dataUtils.relPath(subcatchPath, cairosDir))
         return
 
     # --- Convert SHP → GeoJSON if necessary ---
@@ -273,7 +272,7 @@ def runPraSegmentation(cfg, workFlowDir=None, avaDir=None):
     try:
         subcatchGdf = gpd.read_file(subcatchGeo)
     except Exception:
-        log.exception("Failed to read subcatchments: ./%s", relPath(subcatchGeo, cairosDir))
+        log.exception("Failed to read subcatchments: ./%s", dataUtils.relPath(subcatchGeo, cairosDir))
         return
 
     # --- Process all PRA files ---
