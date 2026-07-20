@@ -399,7 +399,7 @@ INFO:__main__: All inputs complete: /media/christoph/Daten/Cairos/ModelChainProc
 - Inputs: DEM + PRA release (`Inputs/REL/pra*.tif`)
 - Uses `[avaPARAMETER]` and `[avaSIZE]` to compute `ALPHA`, `UMAX`, and `EXP` once per leaf.
 - **Folder rule:** if a leaf path contains `.../SizeN/...`, the computed size is **clamped to `N`** before mapping to ALPHA/UMAX/EXP.
-- DEM selection logic (handled via `workflowUtils.demForLeaf(...)`):
+- DEM selection logic:
 
   - For BigData leaves (default): use `00_input/<DEM>` from `[MAIN].DEM`
   - For single or manual runs: fallback to `Inputs/DEM.tif` if present
@@ -508,4 +508,3 @@ FlowPy output, grouped per PRA and per size class.
 - tbc...
 ---
 ## thats it for now - tbc...
-

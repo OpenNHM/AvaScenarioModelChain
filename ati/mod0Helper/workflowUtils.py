@@ -48,7 +48,6 @@
 
 
 from __future__ import annotations
-from typing import Optional
 import pathlib
 import logging
 import os
@@ -83,14 +82,6 @@ def parseSizeRange(val: str) -> list[int]:
         return list(range(lo, hi + 1))
     parts = [p.strip() for p in v.split(",") if p.strip()]
     return [int(p) for p in parts] if parts else [2, 3, 4, 5]
-
-
-def demForLeaf(use_big_data: bool, input_dir: pathlib.Path, dem_name: str) -> Optional[str]:
-    """Return absolute DEM path if using BigData; else None to use <Inputs>/DEM.tif."""
-    if use_big_data:
-        p = pathlib.Path(input_dir) / dem_name
-        return str(p)
-    return None
 
 
 # ------------------ AvaFrame leaf discovery ------------------ #
@@ -177,19 +168,6 @@ def filterSingleTestDirs(cfg, dirs: list[pathlib.Path], stepLabel: str) -> list[
 
     log.info("%s: Single test mode → %s (%d leaves)", stepLabel, singleDir, len(filtered))
     return filtered
-
-
-@contextmanager
-def stepTimer(label: str):
-    """Context manager for timing a workflow step with unified logging."""
-    t0 = time.perf_counter()
-    log.info("Start %s...", label)
-    try:
-        yield
-        log.info("Finish %s in %.2fs", label, time.perf_counter() - t0)
-    except Exception:
-        log.exception("%s failed.", label)
-        raise
 
 
 def validateInputs(cfg, workFlowDir):

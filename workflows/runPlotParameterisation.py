@@ -8,7 +8,6 @@ import os
 import avaframe.in3Utils.cfgUtils as cfgUtils
 import ati.out1Plots.out1SizeParameter as sizePlots
 import ati.mobilityUtils.compParams as compParams
-import ati
 
 
 def runAndSavePlots(savePlotPath=""):

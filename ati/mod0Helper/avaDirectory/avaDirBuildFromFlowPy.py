@@ -55,15 +55,8 @@ import rasterio
 from rasterio.mask import mask
 import fiona
 
-try:
-    import pyogrio
-
-    _HAS_PYOGRIO = True
-except Exception:
-    _HAS_PYOGRIO = False
-
+import ati.mod0Helper.dataUtils as dataUtils
 from ati.mod0Helper.dataUtils import relPath
-import ati.mod0Helper.workflowUtils as workflowUtils
 
 import sys
 from functools import partial
@@ -270,7 +263,7 @@ def processScenario(outputsDir, cairosDir):
     os.makedirs(mapDir, exist_ok=True)
 
     try:
-        gdf = _read_gdf(geojsonPath)
+        gdf = dataUtils.readGeoData(geojsonPath)
         gdf = _normalize_ids(gdf)
         log.info(
             "Loaded %d features from %s", len(gdf), relPath(geojsonPath, cairosDir)
@@ -321,7 +314,7 @@ def buildScenarioGdf(
     # --- merge reljson (optional) ---
     rel_first = None
     if doMergeReljson and reljsonPath and os.path.isfile(reljsonPath):
-        rel_gdf = _read_gdf(reljsonPath)
+        rel_gdf = dataUtils.readGeoData(reljsonPath)
         rel_gdf = _normalize_ids(rel_gdf)
 
         if "praID" in rel_gdf.columns:
@@ -460,7 +453,7 @@ def splitGeojsonByPraId(
     rel_lookup = {}
     if doMergeReljson and reljsonPath and os.path.isfile(reljsonPath):
         try:
-            reljson_gdf = _read_gdf(reljsonPath)
+            reljson_gdf = dataUtils.readGeoData(reljsonPath)
             reljson_gdf = _normalize_ids(reljson_gdf)
 
             if "praID" in reljson_gdf.columns:
@@ -522,7 +515,7 @@ def splitGeojsonByPraId(
             combined = combined.drop(columns=drop_cols, errors="ignore")
 
             outPath = os.path.join(targetDir, f"praID{k}.geojson")
-            _write_gdf(combined, outPath)
+            dataUtils.writeGeoData(combined, outPath)
         except Exception:
             log.exception("Failed to split/write praID%s", k)
 
@@ -531,14 +524,14 @@ def enrichAvalancheFeature(praFile, resId=None, cairosDir=None):
     if not os.path.exists(praFile):
         return
     try:
-        gdf = _read_gdf(praFile)
+        gdf = dataUtils.readGeoData(praFile)
         gdf = _normalize_ids(gdf)
         if "modType" not in gdf.columns and len(gdf) == 2:
             gdf.loc[gdf.index[0], "modType"] = "res"
             gdf.loc[gdf.index[1], "modType"] = "rel"
         if resId is not None:
             gdf["resultID"] = str(resId)
-        _write_gdf(gdf, praFile)
+        dataUtils.writeGeoData(gdf, praFile)
     except Exception:
         log.exception(
             "Failed to enrich avalanche feature %s", relPath(praFile, cairosDir)
@@ -549,7 +542,7 @@ def _attachScenarioMetadata(praFile, cairosDir, subcatchmentThreshold=None):
     import re
 
     try:
-        gdf_pf = _read_gdf(praFile)
+        gdf_pf = dataUtils.readGeoData(praFile)
         path = str(praFile).replace("\\", "/")
 
         m = re.search(r"subC(\d+)", path)
@@ -580,7 +573,7 @@ def _attachScenarioMetadata(praFile, cairosDir, subcatchmentThreshold=None):
         gdf_pf["pem"] = pem
         gdf_pf["rSize"] = rSize
 
-        _write_gdf(gdf_pf, praFile)
+        dataUtils.writeGeoData(gdf_pf, praFile)
     except Exception:
         log.exception("Failed to extract metadata for %s", relPath(praFile, cairosDir))
 
@@ -683,7 +676,7 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
     for com4Dir in sorted(glob.glob(os.path.join(targetRoot, "com4_*"))):
         for pf in glob.glob(os.path.join(com4Dir, "praID*.geojson")):
             try:
-                gdf = _read_gdf(pf)
+                gdf = dataUtils.readGeoData(pf)
                 df = gdf.drop(columns="geometry", errors="ignore").copy()
                 df["com4Dir"] = os.path.basename(com4Dir)
                 allRecords.append(df)
@@ -699,20 +692,6 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
         log.info(
             "No praID*.geojson found for legacy avaDirectory.csv creation (this is OK in parquet-only mode)."
         )
-
-
-# ------------------ Helper utilities ------------------ #
-def _read_gdf(path, columns=None):
-    if _HAS_PYOGRIO:
-        return pyogrio.read_dataframe(path, columns=columns)
-    return gpd.read_file(path)
-
-
-def _write_gdf(gdf, path, driver="GeoJSON"):
-    if _HAS_PYOGRIO:
-        pyogrio.write_dataframe(gdf, path, driver=driver)
-    else:
-        gdf.to_file(path, driver=driver)
 
 
 def _normalize_ids(df):

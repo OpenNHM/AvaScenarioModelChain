@@ -46,17 +46,9 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-import geopandas as gpd
 
-try:
-    import pyogrio
-
-    _HAS_PYOGRIO = True
-except Exception:
-    _HAS_PYOGRIO = False
-
+import ati.mod0Helper.dataUtils as dataUtils
 from ati.mod0Helper.dataUtils import relPath
-import ati.mod0Helper.workflowUtils as workflowUtils
 
 import sys
 from functools import partial
@@ -76,20 +68,6 @@ tqdm = partial(
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.WARNING)
-
-
-# ------------------ Helpers ------------------ #
-def _read_gdf(path: Path):
-    if path.suffix == ".parquet":
-        return gpd.read_parquet(path)
-    return pyogrio.read_dataframe(path) if _HAS_PYOGRIO else gpd.read_file(path)
-
-
-def _write_gdf(gdf, path: Path, driver="GeoJSON"):
-    if _HAS_PYOGRIO:
-        pyogrio.write_dataframe(gdf, path, driver=driver)
-    else:
-        gdf.to_file(path, driver=driver)
 
 
 # ------------------ Entry Point ------------------ #
@@ -204,7 +182,7 @@ def runAvaDirType(cfg, workFlowDir):
     ):
 
         try:
-            gdf = _read_gdf(Path(fp))
+            gdf = dataUtils.readGeoData(fp)
             allChunks.append(gdf)
         except Exception:
             log.exception("Step 14: Failed to read %s", relPath(Path(fp), cairosDir))
@@ -274,7 +252,7 @@ def runAvaDirType(cfg, workFlowDir):
 
     if writeGeoJSON:
         try:
-            _write_gdf(merged, geojsonPath)
+            dataUtils.writeGeoData(merged, geojsonPath)
             log.info("Step 14: Wrote GeoJSON to %s", relPath(geojsonPath, cairosDir))
         except Exception as e:
             log.warning("Step 14: GeoJSON write warning: %s", e)

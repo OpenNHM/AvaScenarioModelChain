@@ -8,11 +8,9 @@
 import pathlib
 import numpy as np
 import rasterio, rasterio.mask
-from rasterio.fill import fillnodata
 from osgeo import gdal
 import os
 import csv
-from osgeo.gdalconst import GA_ReadOnly
 from skimage import morphology
 import scipy.ndimage
 from ati.mod3Map import autoATESClassifier
