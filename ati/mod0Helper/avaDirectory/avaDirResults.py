@@ -73,15 +73,11 @@ def runAvaDirResults(cfg, workFlowDir):
     log.info("Step 15: Start AvaDirectory Results build...")
 
     avaCfg = cfg["avaDIRECTORY"]
-    main = cfg["MAIN"]
-
-    # --- Resolve core directories dynamically ---
-    rootDir = Path(main["workDir"]) / main["project"] / main["ID"]
 
     # Source: FlowPy output rasters (raw data)
-    avaDirData = rootDir / "11_avaDirectoryData"
+    avaDirData = Path(workFlowDir["avaDirDir"])
     # Destination: library of merged outputs
-    avaDirLib = rootDir / "12_avaDirectory"
+    avaDirLib = Path(workFlowDir["avaDirResultsDir"])
     # Ensure destination exists
     avaDirLib.mkdir(parents=True, exist_ok=True)
 

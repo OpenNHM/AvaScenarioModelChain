@@ -83,12 +83,10 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     log.info("Step 13: Start AvaDirectory build...")
 
     avaCfg = cfg["avaDIRECTORY"]
-    workDir = Path(cfg["MAIN"]["workDir"])
-    project = cfg["MAIN"]["project"]
-    modelID = cfg["MAIN"]["ID"]
 
     # --- Core directories ---
-    baseDir = workDir / project / modelID / "09_flowPyBigDataStructure"
+    flowPySourceDir = workFlowDir.get("flowPySourceDir") or workFlowDir["flowPyRunDir"]
+    baseDir = Path(flowPySourceDir)
     avaDirData = Path(workFlowDir["avaDirDir"])  # 11_avaDirectoryData
     avaDirLib = Path(workFlowDir["avaDirTypeDir"])  # 12_avaDirectory
     cairosDir = Path(workFlowDir["cairosDir"])
@@ -112,8 +110,14 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     doExtractMetadata = avaCfg.getboolean("doExtractMetadata", True)
     doClipRasters = avaCfg.getboolean("doClipRasters", True)
     doCollectSingleAva = avaCfg.getboolean("doCollectSingleAva", True)
+    forceRebuildData = avaCfg.getboolean("forceRebuildData", False)
     maxClipWorkers = avaCfg.getint("maxClipWorkers", 4)
-    subcatchmentThreshold = cfg["praSUBCATCHMENTS"].getint("streamThreshold", fallback=500)
+    if cfg.has_section("praSUBCATCHMENTS"):
+        subcatchmentThreshold = cfg["praSUBCATCHMENTS"].getint(
+            "streamThreshold", fallback=500
+        )
+    else:
+        subcatchmentThreshold = avaCfg.getint("subcatchmentThreshold", fallback=500)
 
     # --- New: output mode flags ---
     writeSingleAvaGeoJSON = avaCfg.getboolean("writeSingleAvaGeoJSON", True)
@@ -133,7 +137,12 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     )
 
     # --- Discover PRA directories and apply single-test filter ---
-    praDirs = sorted(baseDir.glob("pra*/"))
+    praDirs = sorted(
+        path
+        for path in baseDir.rglob("pra*")
+        if path.is_dir()
+        and any(path.glob("Size*/*/Outputs/com4FlowPy"))
+    )
     praDirs = _filterSingleTestDirs(cfg, praDirs, "Step 13")
 
     if not praDirs:
@@ -163,6 +172,7 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     )
 
     lastPraDir = None
+    skippedExisting = 0
     for praDir, flowChoice, outputsDir in tqdm(
         tasks,
         desc="Step 13: FlowPy → AvaDir",
@@ -171,6 +181,20 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
         if praDir is not None and praDir != lastPraDir:
             log.info("Step 13: Processing %s", dataUtils.relPath(praDir, cairosDir))
             lastPraDir = praDir
+
+        if not forceRebuildData and _scenarioOutputComplete(
+            outputsDir,
+            writeSingleAvaGeoJSON,
+            writeScenarioParquet,
+            doSplit,
+            doClipRasters,
+        ):
+            skippedExisting += 1
+            log.debug(
+                "Step 13: Existing scenario output complete; skipping %s",
+                dataUtils.relPath(outputsDir, cairosDir),
+            )
+            continue
 
         gdf, targetDir, resId = (None, None, None)
         if doProcess:
@@ -239,10 +263,53 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     if doCollectSingleAva:
         collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir)
 
+    if skippedExisting:
+        log.info(
+            "Step 13: Reused %d complete scenario folders; processed %d scenarios.",
+            skippedExisting,
+            len(tasks) - skippedExisting,
+        )
     log.info("Step 13: AvaDirectory build complete.")
 
 
 # ------------------ Function: processScenario ------------------ #
+def _scenarioLocation(outputsDir):
+    """Return the result ID and Step 13 scenario directory, if discoverable."""
+    resultFolders = sorted(glob.glob(os.path.join(outputsDir, "peakFiles", "res_*")))
+    if not resultFolders:
+        return None, None
+    resId = os.path.basename(resultFolders[0]).replace("res_", "")
+    flowDir = os.path.dirname(os.path.dirname(outputsDir))
+    targetDir = os.path.join(flowDir, "Map", "singleAvaDir", f"com4_{resId}")
+    return resId, targetDir
+
+
+def _scenarioOutputComplete(
+    outputsDir,
+    writeSingleAvaGeoJSON,
+    writeScenarioParquet,
+    doSplit,
+    doClipRasters,
+):
+    """Return whether the selected Step 13 outputs already exist."""
+    resId, targetDir = _scenarioLocation(outputsDir)
+    if resId is None or targetDir is None or not os.path.isdir(targetDir):
+        return False
+
+    checks = []
+    if writeScenarioParquet:
+        checks.append(
+            os.path.isfile(
+                os.path.join(targetDir, f"avaScenLeaf_com4_{resId}.parquet")
+            )
+        )
+    if writeSingleAvaGeoJSON and doSplit:
+        checks.append(bool(glob.glob(os.path.join(targetDir, "praID*.geojson"))))
+        if doClipRasters:
+            checks.append(bool(glob.glob(os.path.join(targetDir, "*.tif"))))
+    return bool(checks) and all(checks)
+
+
 def processScenario(outputsDir, cairosDir):
     """Locate com4FlowPy results and return (gdf, targetDir, resId)."""
     geojsonFiles = glob.glob(
@@ -255,10 +322,7 @@ def processScenario(outputsDir, cairosDir):
         return None, None, None
 
     geojsonPath = geojsonFiles[0]
-    resFolder = os.path.dirname(geojsonPath)
-    resId = os.path.basename(resFolder).replace("res_", "")
-    flowDir = os.path.dirname(os.path.dirname(outputsDir))
-    mapDir = os.path.join(flowDir, "Map", "singleAvaDir", f"com4_{resId}")
+    resId, mapDir = _scenarioLocation(outputsDir)
     os.makedirs(mapDir, exist_ok=True)
 
     try:
@@ -658,18 +722,18 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
 
     com4Folders = []
     for pattern in [
-        os.path.join(baseDir, "pra*/Size*/dry/Map/singleAvaDir/com4_*"),
-        os.path.join(baseDir, "pra*/Size*/wet/Map/singleAvaDir/com4_*"),
+        os.path.join(baseDir, "**/pra*/Size*/dry/Map/singleAvaDir/com4_*"),
+        os.path.join(baseDir, "**/pra*/Size*/wet/Map/singleAvaDir/com4_*"),
     ]:
-        com4Folders.extend(glob.glob(pattern))
+        com4Folders.extend(glob.glob(pattern, recursive=True))
 
     for src in com4Folders:
         dst = targetRoot / os.path.basename(src)
-        if not dst.exists():
-            try:
-                shutil.copytree(src, dst)
-            except Exception:
-                log.exception("Failed to copy %s", dataUtils.relPath(src, cairosDir))
+        try:
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+            _normalizeCollectedPraIdNames(dst)
+        except Exception:
+            log.exception("Failed to copy %s", dataUtils.relPath(src, cairosDir))
 
     # keep legacy csv (small cases). You already have flags to disable CSV elsewhere.
     allRecords = []
@@ -691,6 +755,24 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
     else:
         log.info(
             "No praID*.geojson found for legacy avaDirectory.csv creation (this is OK in parquet-only mode)."
+        )
+
+
+def _normalizeCollectedPraIdNames(com4Dir):
+    """Remove a duplicated legacy ``praID`` prefix from collected filenames."""
+    renamed = 0
+    for source in Path(com4Dir).rglob("praIDpraID*"):
+        target = source.with_name(source.name.replace("praIDpraID", "praID", 1))
+        if target.exists():
+            source.unlink()
+        else:
+            source.rename(target)
+        renamed += 1
+    if renamed:
+        log.info(
+            "Normalized %d legacy praIDpraID filenames in %s.",
+            renamed,
+            com4Dir,
         )
 
 

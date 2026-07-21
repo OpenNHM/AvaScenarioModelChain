@@ -75,14 +75,12 @@ def runAvaDirType(cfg, workFlowDir):
     log.info("Step 14: Start AvaDirectory Type build...")
 
     wf = cfg["WORKFLOW"]
-    main = cfg["MAIN"]
     avaCfg = cfg["avaDIRECTORY"]
 
-    # --- Resolve directories dynamically ---
-    rootDir = Path(main["workDir"]) / main["project"] / main["ID"]
+    # --- Resolve directories supplied by the active workflow ---
     cairosDir = Path(workFlowDir["cairosDir"])
 
-    avaDirLib = rootDir / "12_avaDirectory"
+    avaDirLib = Path(workFlowDir["avaDirTypeDir"])
     avaDirLib.mkdir(parents=True, exist_ok=True)
 
     # --- Mode flags ---
@@ -120,7 +118,8 @@ def runAvaDirType(cfg, workFlowDir):
     if readScenarioParquet:
         # Scenario parquet files are written by Step 13 into FlowPy folder tree:
         # 09_flowPyBigDataStructure/pra*/Size*/{dry,wet}/Map/singleAvaDir/com4_*/avaScenario.parquet
-        flowPyRoot = rootDir / "09_flowPyBigDataStructure"
+        flowPySourceDir = workFlowDir.get("flowPySourceDir") or workFlowDir["flowPyRunDir"]
+        flowPyRoot = Path(flowPySourceDir)
         if not flowPyRoot.exists():
             log.error(
                 "Step 14: FlowPy root missing: %s", dataUtils.relPath(flowPyRoot, cairosDir)
@@ -129,6 +128,7 @@ def runAvaDirType(cfg, workFlowDir):
 
         pattern = str(
             flowPyRoot
+            / "**"
             / "pra*"
             / "Size*"
             / "*"
@@ -137,12 +137,12 @@ def runAvaDirType(cfg, workFlowDir):
             / "com4_*"
             / "avaScenLeaf_com4_*.parquet"
         )
-        inputFiles = sorted(glob.glob(pattern))
+        inputFiles = sorted(glob.glob(pattern, recursive=True))
         log.info("Step 14: Found %d scenario parquet files", len(inputFiles))
 
     elif readSingleAvaGeoJSON:
         # Legacy mode: read from 11_avaDirectoryData/com4_*/praID*.geojson
-        avaDirData = rootDir / "11_avaDirectoryData"
+        avaDirData = Path(workFlowDir["avaDirDir"])
         if not avaDirData.exists():
             log.warning(
                 "Step 14: Expected AvaDirectoryData missing: %s",
