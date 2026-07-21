@@ -47,7 +47,6 @@ import pandas as pd
 import geopandas as gpd
 
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import relPath
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.WARNING)
@@ -87,9 +86,9 @@ def runAvaDirResults(cfg, workFlowDir):
     avaDirLib.mkdir(parents=True, exist_ok=True)
 
     cairosDir = Path(workFlowDir["cairosDir"])
-    log.info("Step 15: Using AvaDirectoryData = %s", relPath(avaDirData, cairosDir))
+    log.info("Step 15: Using AvaDirectoryData = %s", dataUtils.relPath(avaDirData, cairosDir))
     log.info(
-        "Step 15: Writing outputs to AvaDirectory = %s", relPath(avaDirLib, cairosDir)
+        "Step 15: Writing outputs to AvaDirectory = %s", dataUtils.relPath(avaDirLib, cairosDir)
     )
 
     # --- Check that input AvaDirectoryType exists ---
@@ -98,7 +97,7 @@ def runAvaDirResults(cfg, workFlowDir):
     if not avaTypeParquet.exists() and not avaTypeGeoJSON.exists():
         log.error(
             "Step 15: No avaDirectoryType.* found in %s",
-            relPath(avaDirLib, cairosDir),
+            dataUtils.relPath(avaDirLib, cairosDir),
         )
         return
 
@@ -225,13 +224,13 @@ def _loadOrBuildFileIndex(avaDirData, indexFile, typePatterns, forceRebuild, cai
             log.info(
                 "Step 15: Loaded cached index (%d entries) from %s",
                 len(index),
-                relPath(indexFile, cairosDir),
+                dataUtils.relPath(indexFile, cairosDir),
             )
             return index
         except Exception as e:
             log.warning("Step 15: Failed to load cached index (%s), rebuilding...", e)
 
-    log.info("Step 15: Building file index from %s", relPath(avaDirData, cairosDir))
+    log.info("Step 15: Building file index from %s", dataUtils.relPath(avaDirData, cairosDir))
     index = _buildFileIndex(avaDirData, typePatterns)
     with open(indexFile, "wb") as f:
         pickle.dump(index, f)
@@ -332,7 +331,7 @@ def _makeAvaDirResults(
             avaDir.drop(columns="geometry", errors="ignore").to_csv(outCsv, index=False)
             log.info(
                 "Step 15: Wrote CSV AvaDirectoryResults to %s",
-                relPath(outCsv, cairosDir),
+                dataUtils.relPath(outCsv, cairosDir),
             )
         except Exception as e:
             log.warning("Step 15: CSV write warning: %s", e)
@@ -342,7 +341,7 @@ def _makeAvaDirResults(
             avaDir.to_file(outGeoJson, driver="GeoJSON")
             log.info(
                 "Step 15: Wrote GeoJSON AvaDirectoryResults to %s",
-                relPath(outGeoJson, cairosDir),
+                dataUtils.relPath(outGeoJson, cairosDir),
             )
         except Exception as e:
             log.warning("Step 15: GeoJSON write warning: %s", e)
@@ -352,7 +351,7 @@ def _makeAvaDirResults(
             avaDir.to_parquet(outParquet, index=False)
             log.info(
                 "Step 15: Wrote Parquet AvaDirectoryResults to %s",
-                relPath(outParquet, cairosDir),
+                dataUtils.relPath(outParquet, cairosDir),
             )
         except Exception as e:
             log.warning("Step 15: Parquet write warning: %s", e)
@@ -360,6 +359,6 @@ def _makeAvaDirResults(
     log.info(
         "Step 15: Wrote AvaDirectoryResults (%d features) to %s",
         len(avaDir),
-        relPath(avaDirLib, cairosDir),
+        dataUtils.relPath(avaDirLib, cairosDir),
     )
     return avaDir

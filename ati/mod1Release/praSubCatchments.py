@@ -57,7 +57,7 @@ import avaframe.in1Data.getInput as getInput
 import avaframe.in3Utils.cfgUtils as cfgUtils
 
 import ati
-from ati.mod0Helper.dataUtils import timeIt, relPath
+import ati.mod0Helper.dataUtils as dataUtils
 
 # ------------------ Setup ------------------ #
 
@@ -118,7 +118,7 @@ def prepHydroGrids(demPath, outDir, weightedSlopeFlow=False):
     flowAcc = buildPath(outDir, "flow_accumulation.tif")
     slopeTif = buildPath(outDir, "slope.tif")
 
-    with timeIt("Hydro prep (fill/d8/fac/slope)"):
+    with dataUtils.timeIt("Hydro prep (fill/d8/fac/slope)"):
         runWhiteboxTool("FillDepressions", filledDem, wbt.fill_depressions, demPath, filledDem)
         runWhiteboxTool("D8Pointer", flowDir, wbt.d8_pointer, filledDem, flowDir)
         runWhiteboxTool("D8FlowAccumulation", flowAcc, wbt.d8_flow_accumulation, filledDem, flowAcc)
@@ -179,14 +179,14 @@ def runParamSet(
 
     # 1) Extract streams
     streamsTif = buildPath(outDir, f"streams_{streamThreshold}.tif")
-    with timeIt("Extract streams"):
+    with dataUtils.timeIt("Extract streams"):
         runWhiteboxTool(
             "ExtractStreams", streamsTif, wbt.extract_streams, flowAccToUse, streamsTif, streamThreshold
         )
 
     # 2) Flow-based watershed delineation
     junctionsTif = buildPath(outDir, f"junctions_{streamThreshold}.tif")
-    with timeIt("Watershed delineation"):
+    with dataUtils.timeIt("Watershed delineation"):
         runWhiteboxTool(
             "StreamLinkIdentifier",
             junctionsTif,
@@ -198,7 +198,7 @@ def runParamSet(
         runWhiteboxTool("Watershed", subcatchTif, wbt.watershed, flowDir, junctionsTif, subcatchTif)
 
     # 3) Raster→Vector (raw)
-    with timeIt("Raster→Vector (raw)"):
+    with dataUtils.timeIt("Raster→Vector (raw)"):
         runWhiteboxTool(
             "RasterToVectorPolygons (raw)",
             subcatchShp,
@@ -209,7 +209,7 @@ def runParamSet(
         fixInvalidGeometries(subcatchShp)
 
     # 4) Smooth + Vectorize
-    with timeIt("Smooth + Vectorize"):
+    with dataUtils.timeIt("Smooth + Vectorize"):
         runWhiteboxTool(
             "MajorityFilter",
             smoothSubcatchTif,
@@ -228,7 +228,7 @@ def runParamSet(
         fixInvalidGeometries(smoothSubcatchShp)
 
     # 5) Non-smoothed vector
-    with timeIt("Non-smoothed vector"):
+    with dataUtils.timeIt("Non-smoothed vector"):
         runWhiteboxTool(
             "RasterToVectorPolygons (non-smoothed)",
             nonSmoothSubcatchShp,
@@ -271,7 +271,7 @@ def runSubcatchments(cfg, workFlowDir=None, avaDir=None):
     else:
         demPath = getInput.getDEMPath(avaDir)
 
-    relDemPath = relPath(demPath, cairosDir)
+    relDemPath = dataUtils.relPath(demPath, cairosDir)
 
     subcCfg = cfg["praSUBCATCHMENTS"]
     streamThresholdList = parseIntList(subcCfg.get("streamThreshold", "500"))

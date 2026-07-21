@@ -56,7 +56,6 @@ from rasterio.mask import mask
 import fiona
 
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import relPath
 
 import sys
 from functools import partial
@@ -94,14 +93,14 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     avaDirLib = Path(workFlowDir["avaDirTypeDir"])  # 12_avaDirectory
     cairosDir = Path(workFlowDir["cairosDir"])
 
-    log.info("Step 13: Using baseDir=%s", relPath(baseDir, cairosDir))
-    log.info("Step 13: Using avaDirData=%s", relPath(avaDirData, cairosDir))
-    log.info("Step 13: Using avaDirLib=%s", relPath(avaDirLib, cairosDir))
+    log.info("Step 13: Using baseDir=%s", dataUtils.relPath(baseDir, cairosDir))
+    log.info("Step 13: Using avaDirData=%s", dataUtils.relPath(avaDirData, cairosDir))
+    log.info("Step 13: Using avaDirLib=%s", dataUtils.relPath(avaDirLib, cairosDir))
 
     if not baseDir.exists():
         log.warning(
             "Step 13: Expected FlowPy BigData directory does not exist: %s",
-            relPath(baseDir, cairosDir),
+            dataUtils.relPath(baseDir, cairosDir),
         )
         return
 
@@ -154,7 +153,7 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
     if not tasks:
         log.warning(
             "Step 13: No Outputs/com4FlowPy directories found under %s",
-            relPath(baseDir, cairosDir),
+            dataUtils.relPath(baseDir, cairosDir),
         )
         return
 
@@ -170,7 +169,7 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
         unit="com4",
     ):
         if praDir is not None and praDir != lastPraDir:
-            log.info("Step 13: Processing %s", relPath(praDir, cairosDir))
+            log.info("Step 13: Processing %s", dataUtils.relPath(praDir, cairosDir))
             lastPraDir = praDir
 
         gdf, targetDir, resId = (None, None, None)
@@ -202,12 +201,12 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
                 scenGdf.to_parquet(outParquet, index=False)
                 log.info(
                     "Step 13: Wrote scenario parquet → %s",
-                    relPath(outParquet, cairosDir),
+                    dataUtils.relPath(outParquet, cairosDir),
                 )
             except Exception:
                 log.exception(
                     "Step 13: Failed to write scenario parquet for %s",
-                    relPath(outputsDir, cairosDir),
+                    dataUtils.relPath(outputsDir, cairosDir),
                 )
 
         # --- Legacy mode: split into many praID*.geojson ---
@@ -251,7 +250,7 @@ def processScenario(outputsDir, cairosDir):
     )
     if not geojsonFiles:
         log.warning(
-            "No pathPolygons.geojson found in %s", relPath(outputsDir, cairosDir)
+            "No pathPolygons.geojson found in %s", dataUtils.relPath(outputsDir, cairosDir)
         )
         return None, None, None
 
@@ -266,11 +265,11 @@ def processScenario(outputsDir, cairosDir):
         gdf = dataUtils.readGeoData(geojsonPath)
         gdf = _normalize_ids(gdf)
         log.info(
-            "Loaded %d features from %s", len(gdf), relPath(geojsonPath, cairosDir)
+            "Loaded %d features from %s", len(gdf), dataUtils.relPath(geojsonPath, cairosDir)
         )
         return gdf, mapDir, resId
     except Exception:
-        log.exception("Failed to read GeoJSON %s", relPath(geojsonPath, cairosDir))
+        log.exception("Failed to read GeoJSON %s", dataUtils.relPath(geojsonPath, cairosDir))
         return None, None, resId
 
 
@@ -324,7 +323,7 @@ def buildScenarioGdf(
         else:
             log.warning(
                 "RELJSON %s has no praID/PRA_id column → skipping merge.",
-                relPath(reljsonPath, cairosDir),
+                dataUtils.relPath(reljsonPath, cairosDir),
             )
             rel_gdf = None
 
@@ -436,7 +435,7 @@ def splitGeojsonByPraId(
     gdf_res, targetDir, reljsonPath=None, doMergeReljson=True, cairosDir=None
 ):
     if gdf_res is None or gdf_res.empty:
-        log.warning("Nothing to split in %s", relPath(targetDir, cairosDir))
+        log.warning("Nothing to split in %s", dataUtils.relPath(targetDir, cairosDir))
         return
 
     gdf_res = _normalize_ids(gdf_res)
@@ -446,7 +445,7 @@ def splitGeojsonByPraId(
     elif "PRA_id" in gdf_res.columns:
         key_series = gdf_res["PRA_id"].apply(_extract_int_like)
     else:
-        log.warning("No PRA_id/praID column in %s", relPath(targetDir, cairosDir))
+        log.warning("No PRA_id/praID column in %s", dataUtils.relPath(targetDir, cairosDir))
         return
 
     keys = sorted({k for k in key_series.tolist() if k is not None})
@@ -463,7 +462,7 @@ def splitGeojsonByPraId(
             else:
                 log.warning(
                     "RELJSON %s has no praID/PRA_id column → skipping merge.",
-                    relPath(reljsonPath, cairosDir),
+                    dataUtils.relPath(reljsonPath, cairosDir),
                 )
                 rel_key = None
 
@@ -476,7 +475,7 @@ def splitGeojsonByPraId(
 
                 log.info("RELJSON merged: %d keyed release features.", len(rel_lookup))
         except Exception:
-            log.exception("Failed to read RELJSON %s", relPath(reljsonPath, cairosDir))
+            log.exception("Failed to read RELJSON %s", dataUtils.relPath(reljsonPath, cairosDir))
 
     gdf_res["_key"] = key_series
     for k in keys:
@@ -534,7 +533,7 @@ def enrichAvalancheFeature(praFile, resId=None, cairosDir=None):
         dataUtils.writeGeoData(gdf, praFile)
     except Exception:
         log.exception(
-            "Failed to enrich avalanche feature %s", relPath(praFile, cairosDir)
+            "Failed to enrich avalanche feature %s", dataUtils.relPath(praFile, cairosDir)
         )
 
 
@@ -575,13 +574,13 @@ def _attachScenarioMetadata(praFile, cairosDir, subcatchmentThreshold=None):
 
         dataUtils.writeGeoData(gdf_pf, praFile)
     except Exception:
-        log.exception("Failed to extract metadata for %s", relPath(praFile, cairosDir))
+        log.exception("Failed to extract metadata for %s", dataUtils.relPath(praFile, cairosDir))
 
 
 def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4):
     maskFiles = sorted(glob.glob(os.path.join(maskDir, "praID*.geojson")))
     if not maskFiles:
-        log.warning("No PRA masks found in %s", relPath(maskDir, cairosDir))
+        log.warning("No PRA masks found in %s", dataUtils.relPath(maskDir, cairosDir))
         return
 
     rasterFiles = []
@@ -598,7 +597,7 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
     )
 
     if not rasterFiles and not relRasterFiles:
-        log.warning("No rasters found under %s", relPath(outputsDir, cairosDir))
+        log.warning("No rasters found under %s", dataUtils.relPath(outputsDir, cairosDir))
         return
 
     def _clip_one_raster(rasterFile, use_res_only=False):
@@ -633,7 +632,7 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
                             dest.write(outImage)
                         done += 1
         except Exception:
-            log.exception("Failed to clip %s", relPath(rasterFile, cairosDir))
+            log.exception("Failed to clip %s", dataUtils.relPath(rasterFile, cairosDir))
         return done
 
     log.info(
@@ -646,7 +645,7 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
         if relRasterFiles:
             futures += [ex.submit(_clip_one_raster, rf, True) for rf in relRasterFiles]
         total = sum(f.result() for f in as_completed(futures))
-    log.info("Wrote %d clipped rasters in %s", total, relPath(outputDir, cairosDir))
+    log.info("Wrote %d clipped rasters in %s", total, dataUtils.relPath(outputDir, cairosDir))
 
 
 def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
@@ -654,7 +653,7 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
     libRoot = avaDirLib
     targetRoot.mkdir(parents=True, exist_ok=True)
     libRoot.mkdir(parents=True, exist_ok=True)
-    log.info("Collecting com4_* folders into %s", relPath(targetRoot, cairosDir))
+    log.info("Collecting com4_* folders into %s", dataUtils.relPath(targetRoot, cairosDir))
 
     com4Folders = []
     for pattern in [
@@ -669,7 +668,7 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
             try:
                 shutil.copytree(src, dst)
             except Exception:
-                log.exception("Failed to copy %s", relPath(src, cairosDir))
+                log.exception("Failed to copy %s", dataUtils.relPath(src, cairosDir))
 
     # keep legacy csv (small cases). You already have flags to disable CSV elsewhere.
     allRecords = []
@@ -681,13 +680,13 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
                 df["com4Dir"] = os.path.basename(com4Dir)
                 allRecords.append(df)
             except Exception:
-                log.exception("Failed to read %s", relPath(pf, cairosDir))
+                log.exception("Failed to read %s", dataUtils.relPath(pf, cairosDir))
 
     if allRecords:
         merged = pd.concat(allRecords, ignore_index=True)
         csvPath = libRoot / "avaDirectory.csv"
         merged.to_csv(csvPath, index=False)
-        log.info("Merged %d rows into %s", len(merged), relPath(csvPath, cairosDir))
+        log.info("Merged %d rows into %s", len(merged), dataUtils.relPath(csvPath, cairosDir))
     else:
         log.info(
             "No praID*.geojson found for legacy avaDirectory.csv creation (this is OK in parquet-only mode)."

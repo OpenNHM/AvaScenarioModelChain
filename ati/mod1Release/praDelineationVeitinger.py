@@ -72,7 +72,6 @@ import avaframe.in3Utils.cfgUtils as cfgUtils
 
 import ati
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import timeIt
 import ati.mod1Release.praDelineationVeitinger as praDelineationVeitinger
 
 log = logging.getLogger(__name__)
@@ -244,7 +243,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     slopePath = os.path.join(praDelineationDir, "slope.tif")
     aspectPath = os.path.join(praDelineationDir, "aspect.tif")
 
-    with timeIt("slope/aspect", level=logging.INFO):
+    with dataUtils.timeIt("slope/aspect", level=logging.INFO):
         if not os.path.exists(slopePath) or not os.path.exists(aspectPath):
             demDs = gdal.Open(demPath)
             gdal.DEMProcessing(slopePath, demDs, "slope", computeEdges=True)
@@ -274,7 +273,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     # ------------------------------------------------------------------
     # Step 2: Windshelter (DEM + kernel geometry)
     # ------------------------------------------------------------------
-    with timeIt("windshelter (numba)", level=logging.INFO):
+    with dataUtils.timeIt("windshelter (numba)", level=logging.INFO):
         dist, mask = windShelterPrep(
             radius,
             windDir - windTol + 270,
@@ -300,7 +299,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     # ------------------------------------------------------------------
     # Step 3: Ruggedness (slope + aspect)
     # ------------------------------------------------------------------
-    with timeIt("ruggedness", level=logging.INFO):
+    with dataUtils.timeIt("ruggedness", level=logging.INFO):
         aspect, _ = dataUtils.readRaster(aspectPath, return_profile=True)
         slope2d, _ = dataUtils.readRaster(slopePath, return_profile=True)
 
@@ -339,7 +338,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     # ------------------------------------------------------------------
     # Step 4: Curves (slopeC, windshelterC)
     # ------------------------------------------------------------------
-    with timeIt("slopeC & windshelterC", level=logging.INFO):
+    with dataUtils.timeIt("slopeC & windshelterC", level=logging.INFO):
         slopeBand1, _ = dataUtils.readRaster(slopePath, return_profile=True)
         windShelterBand1, _ = dataUtils.readRaster(
             os.path.join(praDelineationDir, "windshelter.tif"),
@@ -382,7 +381,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     else:
         raise ValueError("Unknown forest type.")
 
-    with timeIt("forestC", level=logging.INFO):
+    with dataUtils.timeIt("forestC", level=logging.INFO):
         if forestType in ["pcc", "stems", "bav", "sen2cc"]:
             forest2d, forestProfile = dataUtils.readRaster(forestPath, return_profile=True)
             forest2d[np.isnan(forest2d)] = -9999
@@ -437,7 +436,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     # ------------------------------------------------------------------
     # Step 6: Continuous PRA (pra.tif) from slopeC, windshelterC, forestC, ruggC
     # ------------------------------------------------------------------
-    with timeIt("continuous PRA", level=logging.INFO):
+    with dataUtils.timeIt("continuous PRA", level=logging.INFO):
         ruggC2d, _ = dataUtils.readRaster(
             os.path.join(praDelineationDir, "ruggC.tif"),
             return_profile=True,
@@ -475,7 +474,7 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     # ------------------------------------------------------------------
     # Step 7: PRA Thresholding (binary PRA masks)
     # ------------------------------------------------------------------
-    with timeIt("PRA thresholding", level=logging.INFO):
+    with dataUtils.timeIt("PRA thresholding", level=logging.INFO):
         pra2d, _ = dataUtils.readRaster(
             os.path.join(praDelineationDir, "pra.tif"),
             return_profile=True,

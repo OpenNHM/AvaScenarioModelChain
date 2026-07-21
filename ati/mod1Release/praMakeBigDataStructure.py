@@ -54,7 +54,7 @@ import shutil
 import logging
 from typing import Optional
 
-from ati.mod0Helper.dataUtils import relPath, timeIt
+import ati.mod0Helper.dataUtils as dataUtils
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.ERROR)
@@ -97,7 +97,7 @@ def _extractSizeNumberFromBase(baseName: str) -> Optional[int]:
 def _logDirectoryTree(baseDir, cairosDir, level=logging.INFO):
     """Optional full directory tree logger."""
     baseDir = os.path.abspath(baseDir)
-    log.log(level, "Directory tree for ./%s", relPath(baseDir, cairosDir))
+    log.log(level, "Directory tree for ./%s", dataUtils.relPath(baseDir, cairosDir))
     for root, dirs, files in os.walk(baseDir):
         depth = os.path.relpath(root, start=baseDir).count(os.sep)
         indent = "    " * depth
@@ -138,8 +138,8 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
 
     log.info(
         "...MakeBigData using: in=./%s, out=./%s, streamThr=%s, minLen=%s, smoothWin=%s, sizeF=%s, usePraBoundary=%s",
-        relPath(inputFolder, cairosDir),
-        relPath(outCaseDir, cairosDir),
+        dataUtils.relPath(inputFolder, cairosDir),
+        dataUtils.relPath(outCaseDir, cairosDir),
         streamThreshold,
         minLength,
         smoothingWindowSize,
@@ -150,7 +150,7 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
     # --- Collect rasters ---
     allTifs = _iterTifs(inputFolder)
     if not allTifs:
-        log.error("No .tif rasters found in ./%s", relPath(inputFolder, cairosDir))
+        log.error("No .tif rasters found in ./%s", dataUtils.relPath(inputFolder, cairosDir))
         return
 
     def _isPraCandidate(path):
@@ -163,18 +163,22 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
     tifs = [t for t in allTifs if _isPraCandidate(t)]
     if not tifs:
         exp = "with -praBound suffix" if usePraBoundary else "without -praBound suffix"
-        log.error("No 'pra*.tif' rasters found %s in ./%s", exp, relPath(inputFolder, cairosDir))
+        log.error(
+            "No 'pra*.tif' rasters found %s in ./%s",
+            exp,
+            dataUtils.relPath(inputFolder, cairosDir),
+        )
         return
 
     for t in tifs:
-        log.debug("Using raster: ./%s", relPath(t, cairosDir))
+        log.debug("Using raster: ./%s", dataUtils.relPath(t, cairosDir))
 
     # --- Build structure and copy rasters ---
     nFoldersCreated = nCopied = nSkipped = 0
 
     for tifPath in tifs:
         try:
-            with timeIt(f"makeCase({os.path.basename(tifPath)})"):
+            with dataUtils.timeIt(f"makeCase({os.path.basename(tifPath)})"):
                 fileStem = os.path.splitext(os.path.basename(tifPath))[0]
 
                 # --- clean folderBase robustly (remove technical suffixes) ---
@@ -224,11 +228,11 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                             nCopied += 1
                             log.debug(
                                 "Copied: ./%s -> ./%s",
-                                relPath(tifPath, cairosDir),
-                                relPath(dstPath, cairosDir),
+                                dataUtils.relPath(tifPath, cairosDir),
+                                dataUtils.relPath(dstPath, cairosDir),
                             )
                         except Exception:
-                            log.exception("Copy failed to ./%s", relPath(relDir, cairosDir))
+                            log.exception("Copy failed to ./%s", dataUtils.relPath(relDir, cairosDir))
 
                         # --- Copy matching GeoJSON (if exists) ---
                         geoBase = folderBase + ".geojson"
@@ -239,12 +243,13 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                                 shutil.copy2(geojsonSearch, dstJson)
                                 log.debug(
                                     "Copied GeoJSON: ./%s -> ./%s",
-                                    relPath(geojsonSearch, cairosDir),
-                                    relPath(dstJson, cairosDir),
+                                    dataUtils.relPath(geojsonSearch, cairosDir),
+                                    dataUtils.relPath(dstJson, cairosDir),
                                 )
                             except Exception:
                                 log.exception(
-                                    "Copy failed for GeoJSON to ./%s", relPath(relJsonDir, cairosDir)
+                                    "Copy failed for GeoJSON to ./%s",
+                                    dataUtils.relPath(relJsonDir, cairosDir),
                                 )
                         else:
                             log.debug("No GeoJSON found for base=%s", folderBase)
@@ -259,14 +264,16 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
                             nCopied += 1
                             log.debug(
                                 "Copied: ./%s -> ./%s",
-                                relPath(tifPath, cairosDir),
-                                relPath(dstPath, cairosDir),
+                                dataUtils.relPath(tifPath, cairosDir),
+                                dataUtils.relPath(dstPath, cairosDir),
                             )
                         except Exception:
-                            log.exception("Copy failed to ./%s", relPath(relAreaDir, cairosDir))
+                            log.exception(
+                                "Copy failed to ./%s", dataUtils.relPath(relAreaDir, cairosDir)
+                            )
 
         except Exception:
-            log.exception("Case creation failed for ./%s", relPath(tifPath, cairosDir))
+            log.exception("Case creation failed for ./%s", dataUtils.relPath(tifPath, cairosDir))
 
     # --- optional directory tree log ---
     if logDirectoryTree:

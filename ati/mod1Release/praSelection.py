@@ -53,7 +53,6 @@ import rasterio.features
 from typing import cast
 
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import timeIt, relPath
 
 log = logging.getLogger(__name__)
 
@@ -201,7 +200,7 @@ def runPraSelection(cfg, workFlowDir):
         if getattr(commGdf, "crs", None) != demCrs:
             commGdf = commGdf.to_crs(demCrs)
 
-        with timeIt("commission region mask"):
+        with dataUtils.timeIt("commission region mask"):
             maskArr = rasterio.features.rasterize(
                 [(geom, 1) for geom in commGdf.geometry],
                 out_shape=praData.shape,
@@ -233,8 +232,8 @@ def runPraSelection(cfg, workFlowDir):
         groupsToRun = [sectorNameToGroups[k] for k in keys]
 
     # --- Relative paths for logs ---
-    relDemPath = relPath(demPath, cairosDir)
-    relPraDir = relPath(delineationDir, cairosDir)
+    relDemPath = dataUtils.relPath(demPath, cairosDir)
+    relPraDir = dataUtils.relPath(delineationDir, cairosDir)
 
     log.info(
         "...PRA selection using: DEM=./%s, threshold=%.2f, elev=%dhm-%dhm, aspect=%s, maskCommRegion=%s",
@@ -253,7 +252,7 @@ def runPraSelection(cfg, workFlowDir):
 
     praThreshold100 = f"{int(praThreshold * 100):03d}"
     for sectors in groupsToRun:
-        with timeIt(f"aspect sector {sectors}"):
+        with dataUtils.timeIt(f"aspect sector {sectors}"):
             if sectors == ["all"]:
                 finalMask = np.logical_and(praFiltered, demFiltered)
             else:
@@ -269,7 +268,7 @@ def runPraSelection(cfg, workFlowDir):
             )
 
             writeRaster(outPath, finalMask.astype(np.int16), demPath)
-            relOutPath = relPath(outPath, cairosDir)
+            relOutPath = dataUtils.relPath(outPath, cairosDir)
             log.info("...selected PRA written to: ./%s", relOutPath)
 
     log.info("Step 02: PRA selection done in %.2fs", time.perf_counter() - tAll)

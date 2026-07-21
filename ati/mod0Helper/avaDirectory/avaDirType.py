@@ -48,7 +48,6 @@ from pathlib import Path
 import pandas as pd
 
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import relPath
 
 import sys
 from functools import partial
@@ -124,7 +123,7 @@ def runAvaDirType(cfg, workFlowDir):
         flowPyRoot = rootDir / "09_flowPyBigDataStructure"
         if not flowPyRoot.exists():
             log.error(
-                "Step 14: FlowPy root missing: %s", relPath(flowPyRoot, cairosDir)
+                "Step 14: FlowPy root missing: %s", dataUtils.relPath(flowPyRoot, cairosDir)
             )
             return
 
@@ -147,14 +146,14 @@ def runAvaDirType(cfg, workFlowDir):
         if not avaDirData.exists():
             log.warning(
                 "Step 14: Expected AvaDirectoryData missing: %s",
-                relPath(avaDirData, cairosDir),
+                dataUtils.relPath(avaDirData, cairosDir),
             )
             return
 
         com4Folders = sorted(glob.glob(str(avaDirData / "com4_*")))
         if not com4Folders:
             log.warning(
-                "Step 14: No com4_* folders found in %s", relPath(avaDirData, cairosDir)
+                "Step 14: No com4_* folders found in %s", dataUtils.relPath(avaDirData, cairosDir)
             )
             return
 
@@ -185,7 +184,7 @@ def runAvaDirType(cfg, workFlowDir):
             gdf = dataUtils.readGeoData(fp)
             allChunks.append(gdf)
         except Exception:
-            log.exception("Step 14: Failed to read %s", relPath(Path(fp), cairosDir))
+            log.exception("Step 14: Failed to read %s", dataUtils.relPath(Path(fp), cairosDir))
 
     if not allChunks:
         log.warning("Step 14: All reads failed → no output created.")
@@ -246,21 +245,21 @@ def runAvaDirType(cfg, workFlowDir):
             merged.drop(columns="geometry", errors="ignore").to_csv(
                 csvPath, index=False
             )
-            log.info("Step 14: Wrote CSV to %s", relPath(csvPath, cairosDir))
+            log.info("Step 14: Wrote CSV to %s", dataUtils.relPath(csvPath, cairosDir))
         except Exception as e:
             log.warning("Step 14: CSV write warning: %s", e)
 
     if writeGeoJSON:
         try:
             dataUtils.writeGeoData(merged, geojsonPath)
-            log.info("Step 14: Wrote GeoJSON to %s", relPath(geojsonPath, cairosDir))
+            log.info("Step 14: Wrote GeoJSON to %s", dataUtils.relPath(geojsonPath, cairosDir))
         except Exception as e:
             log.warning("Step 14: GeoJSON write warning: %s", e)
 
     if writeParquet:
         try:
             merged.to_parquet(parquetPath, index=False)
-            log.info("Step 14: Wrote Parquet to %s", relPath(parquetPath, cairosDir))
+            log.info("Step 14: Wrote Parquet to %s", dataUtils.relPath(parquetPath, cairosDir))
         except Exception as e:
             log.warning("Step 14: Parquet write warning: %s", e)
 
