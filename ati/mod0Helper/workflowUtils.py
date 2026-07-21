@@ -171,15 +171,14 @@ def filterSingleTestDirs(cfg, dirs: list[pathlib.Path], stepLabel: str) -> list[
 
 
 def validateInputs(cfg, workFlowDir):
-    """Check existence and validity of DEM, FOREST, and BOUNDARY inputs."""
-    import pathlib
+    """Check required rasters and resolve optional regional inputs."""
     import rasterio
     from ati.mod0Helper import dataUtils
+    from ati.mod0Helper import regionUtils
 
     inputDir = pathlib.Path(workFlowDir["inputDir"])
     dem = cfg["MAIN"].get("DEM", "").strip()
     forest = cfg["MAIN"].get("FOREST", "").strip()
-    boundary = cfg["MAIN"].get("BOUNDARY", "").strip()
 
     dem_epsg = None
     if dem:
@@ -192,13 +191,12 @@ def validateInputs(cfg, workFlowDir):
                 log.warning("Step 00: Could not read DEM CRS from %s; using existing raster CRS.", dem_path)
 
     missing = []
-    for label, fname in (("DEM", dem), ("FOREST", forest), ("BOUNDARY", boundary)):
-        if not fname:
-            missing.append(f"{label}=<empty in INI>")
-        else:
-            fpath = inputDir / fname
-            if not fpath.exists():
-                missing.append(f"{label}={fname}")
+    if not dem:
+        missing.append("DEM=<empty in INI>")
+    elif not (inputDir / dem).exists():
+        missing.append(f"DEM={dem}")
+    if forest and not (inputDir / forest).exists():
+        missing.append(f"FOREST={forest}")
 
     if missing:
         log.error("Step 00: Required input files are missing in ./%s:",
@@ -207,6 +205,9 @@ def validateInputs(cfg, workFlowDir):
             log.error("  - %s", m)
         log.error("\n\n          ... Please provide the required input files and run again ...\n")
         return False
+
+    if not forest:
+        log.info("Step 00: No optional FOREST raster configured.")
 
     # --- Validate rasters (DEM, FOREST) ---
     for label, fname in (("DEM", dem), ("FOREST", forest)):
@@ -220,7 +221,15 @@ def validateInputs(cfg, workFlowDir):
             log.exception("Step 00: Failed to normalize %s: %s", label, fpath)
             return False
 
-    log.info("Step 00: All raster inputs validated: DEM + FOREST nodata/CRS checked and safe.")
+    try:
+        regionUtils.resolveBoundary(cfg, workFlowDir)
+        regionUtils.validateConfiguredRegionInputs(cfg, workFlowDir)
+    except Exception:
+        log.exception("Step 00: Boundary or regional input validation failed.")
+        return False
+
+    forestStatus = "FOREST validated" if forest else "FOREST not provided"
+    log.info("Step 00: Inputs validated: DEM safe, %s, processing boundary resolved.", forestStatus)
     return True
 
 

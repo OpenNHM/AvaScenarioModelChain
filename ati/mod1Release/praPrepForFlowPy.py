@@ -14,7 +14,7 @@
 #     - Step 06 outputs:
 #           *-ElevBands-Sized.geojson
 #     - DEM (from [MAIN])
-#     - BOUNDARY polygon (from [MAIN])
+#     - Resolved processing boundary (configured or generated from the DEM)
 #
 # Outputs :
 #     Main model chain: ./08_praPrepForFlowPy/
@@ -51,7 +51,6 @@
 
 
 import os
-import re
 import glob
 import time
 import logging
@@ -65,6 +64,7 @@ import avaframe.in3Utils.cfgUtils as cfgUtils
 
 import ati
 from ati.mod0Helper import dataUtils
+from ati.mod0Helper import regionUtils
 from ati.mod0Helper.cfgUtils import loadElevationBands
 
 # ------------------ Logging setup ------------------ #
@@ -262,14 +262,14 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
 
     os.makedirs(praPrepForFlowPyDir, exist_ok=True)
 
-    # --- DEM & BOUNDARY ---
+    # --- DEM and resolved processing boundary ---
     if cfg["MAIN"].getboolean("customPaths"):
         demName = cfg["MAIN"]["DEM"]
         demPath = inputDir / demName
     else:
         demPath = getInput.getDEMPath(avaDir)
 
-    boundPath = inputDir / cfg["MAIN"].get("BOUNDARY", "").strip()
+    boundPath = inputDir / regionUtils.getBoundaryName(cfg)
     if not boundPath.is_file():
         boundPath = ""
     _, demProfile = dataUtils.readRaster(demPath, return_profile=True)
@@ -322,16 +322,6 @@ def runPraPrepForFlowPy(cfg, workFlowDir=None, avaDir=None):
                 dataUtils.relPath(fPath, cairosDir),
                 ", ".join(combos),
             )
-
-    # --- Step 2b: rename outputs (remove '-ElevBands-Sized') ---
-    for f in glob.glob(os.path.join(outDir, "*-ElevBands-Sized-*")):
-        newName = re.sub(r"-ElevBands-Sized", "", f)
-        if newName != f:
-            try:
-                os.rename(f, newName)
-                log.debug("Renamed output: %s -> %s", os.path.basename(f), os.path.basename(newName))
-            except Exception:
-                log.exception("Failed to rename %s", f)
 
     # --- Step 3: rasterization ---
     nOkRas, nFailRas = _rasterizeAllVectors(outDir, demPath, boundPath, cfg, cairosDir)

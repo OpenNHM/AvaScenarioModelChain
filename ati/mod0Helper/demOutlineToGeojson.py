@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a GeoJSON boundary from the valid DEM footprint where values are > 1."""
+"""Create a GeoJSON boundary from the valid DEM footprint."""
 
 # python python ati/mod0Helper/demOutlineToGeojson.py /path/to/dem.tif
 
@@ -53,22 +53,34 @@ def ensureMultiPolygon(geometry: Any) -> MultiPolygon:
 
 def deriveDemOutline(
     demPath: Path,
-    threshold: float = 1.0,
+    threshold: float | None = None,
 ) -> tuple[MultiPolygon, int]:
-    """Polygonize and dissolve all DEM cells with values greater than threshold."""
+    """Polygonize and dissolve valid DEM cells.
+
+    Parameters
+    ----------
+    demPath : pathlib.Path
+        Input elevation raster.
+    threshold : float, optional
+        Additional minimum elevation. By default, every finite, non-nodata
+        DEM cell is included.
+
+    Returns
+    -------
+    tuple
+        Dissolved DEM footprint and its EPSG code.
+    """
     with rasterio.open(demPath) as src:
         demData = src.read(1, masked=True)
         demValues = np.asarray(demData.data)
 
-        validMask = (
-            ~np.ma.getmaskarray(demData)
-            & np.isfinite(demValues)
-            & (demValues > threshold)
-        )
+        validMask = ~np.ma.getmaskarray(demData) & np.isfinite(demValues)
+        if threshold is not None:
+            validMask &= demValues > threshold
 
         if not np.any(validMask):
             raise ValueError(
-                f"No DEM cells with values > {threshold} found in {demPath}"
+                f"No valid DEM cells found in {demPath}"
             )
 
         polygonParts = [
@@ -101,9 +113,24 @@ def deriveDemOutline(
 def createDemOutlineGeojson(
     demPath: str | Path,
     outputPath: str | Path | None = None,
-    threshold: float = 1.0,
+    threshold: float | None = None,
 ) -> Path:
-    """Create the dissolved DEM outline GeoJSON with fixed CAIROS attributes."""
+    """Create a dissolved DEM-outline GeoJSON.
+
+    Parameters
+    ----------
+    demPath : str or pathlib.Path
+        Input elevation raster.
+    outputPath : str or pathlib.Path, optional
+        Output GeoJSON. By default, it is written beside the DEM.
+    threshold : float, optional
+        Additional minimum elevation applied to otherwise valid DEM cells.
+
+    Returns
+    -------
+    pathlib.Path
+        Created GeoJSON path.
+    """
     demPath = Path(demPath).expanduser().resolve()
     if not demPath.is_file():
         raise FileNotFoundError(f"DEM not found: {demPath}")
@@ -129,12 +156,7 @@ def createDemOutlineGeojson(
         "features": [
             {
                 "type": "Feature",
-                "properties": {
-                    "LKGebiet": "1",
-                    "LKGebietID": "1",
-                    "LKRegion": "1",
-                    "LWDGebietID": "1",
-                },
+                "properties": {},
                 "geometry": mapping(geometry),
             }
         ],
@@ -150,7 +172,7 @@ def createDemOutlineGeojson(
         )
 
     log.info(
-        "DEM outline written to: %s (threshold > %s, EPSG:%s)",
+        "DEM outline written to: %s (threshold=%s, EPSG:%s)",
         outputPath,
         threshold,
         epsgCode,
@@ -162,10 +184,7 @@ def createDemOutlineGeojson(
 
 def parseArguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Create a dissolved MultiPolygon GeoJSON from DEM cells "
-            "whose values are greater than a threshold."
-        )
+        description="Create a dissolved MultiPolygon GeoJSON from valid DEM cells."
     )
     parser.add_argument("demPath", type=Path, help="Input DEM raster")
     parser.add_argument(
@@ -179,8 +198,8 @@ def parseArguments() -> argparse.Namespace:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=1.0,
-        help="Keep DEM cells with values greater than this value; default: 1",
+        default=None,
+        help="Optional minimum elevation; default: use all valid DEM cells",
     )
     return parser.parse_args()
 

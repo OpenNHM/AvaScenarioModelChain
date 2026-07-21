@@ -124,7 +124,7 @@ def runAvaDirResults(cfg, workFlowDir):
 
     # --- Raster filename patterns ---
     typePatterns = {
-        "inputPRA": "-area_m.tif",
+        "inputPRA": ("-praAreaM.tif", "-area_m.tif"),
         "cellCounts": "_cellCounts_lzw.tif",
         "zDelta": "_zdelta_lzw.tif",
         "zDelta_sized": "_zdelta_sized_lzw.tif",
@@ -208,8 +208,10 @@ def _buildFileIndex(avaDirData: Path, typePatterns: dict) -> dict:
                 pra = int(praStr)
             except ValueError:
                 continue
-            for t, pat in typePatterns.items():
-                if pat in fname:
+            for t, patterns in typePatterns.items():
+                if isinstance(patterns, str):
+                    patterns = (patterns,)
+                if any(pattern in fname for pattern in patterns):
                     index.setdefault((pra, rid), {})[t] = str(tifPath.resolve())
                     break
     return index
@@ -221,12 +223,22 @@ def _loadOrBuildFileIndex(avaDirData, indexFile, typePatterns, forceRebuild, cai
         try:
             with open(indexFile, "rb") as f:
                 index = pickle.load(f)
-            log.info(
-                "Step 15: Loaded cached index (%d entries) from %s",
-                len(index),
-                dataUtils.relPath(indexFile, cairosDir),
+            indexedInputPra = any("inputPRA" in entry for entry in index.values())
+            inputPraPatterns = typePatterns["inputPRA"]
+            availableInputPra = any(
+                any(com4Dir.glob(f"*{pattern}"))
+                for com4Dir in Path(avaDirData).glob("com4_*")
+                for pattern in inputPraPatterns
             )
-            return index
+            if availableInputPra and not indexedInputPra:
+                log.info("Step 15: Cached index has no input PRA paths; rebuilding index.")
+            else:
+                log.info(
+                    "Step 15: Loaded cached index (%d entries) from %s",
+                    len(index),
+                    dataUtils.relPath(indexFile, cairosDir),
+                )
+                return index
         except Exception as e:
             log.warning("Step 15: Failed to load cached index (%s), rebuilding...", e)
 
@@ -260,11 +272,21 @@ def _makeAvaDirResults(
     if outParquet.exists() and not forceRebuild and writeParquet:
         try:
             avaDir = gpd.read_parquet(outParquet)
-            log.info(
-                "Step 15: Loaded cached AvaDirectoryResults (%d features)",
-                len(avaDir),
+            indexedInputPra = any("inputPRA" in entry for entry in fileIndex.values())
+            cachedInputPra = (
+                "pathInputpra" in avaDir.columns
+                and avaDir["pathInputpra"].notna().any()
             )
-            return avaDir
+            if indexedInputPra and not cachedInputPra:
+                log.info(
+                    "Step 15: Cached results have no input PRA paths; rebuilding results."
+                )
+            else:
+                log.info(
+                    "Step 15: Loaded cached AvaDirectoryResults (%d features)",
+                    len(avaDir),
+                )
+                return avaDir
         except Exception as e:
             log.warning("Step 15: Failed to load cached Results (%s), rebuilding...", e)
 

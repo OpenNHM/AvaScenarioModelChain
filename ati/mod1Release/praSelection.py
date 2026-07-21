@@ -21,7 +21,7 @@
 #         • selectedThreshold   PRA probability cutoff
 #         • minElev, maxElev    elevation limits
 #         • aspectSector        directional constraint (e.g. N, E, SW, all)
-#         • maskCommRegion      optional masking by commission region
+#         • applyRegionMask     optional masking by a project region
 #
 # Consumes :
 #     - Outputs from Step 01 (PRA delineation)
@@ -53,6 +53,7 @@ import rasterio.features
 from typing import cast
 
 import ati.mod0Helper.dataUtils as dataUtils
+import ati.mod0Helper.regionUtils as regionUtils
 
 log = logging.getLogger(__name__)
 
@@ -176,33 +177,28 @@ def runPraSelection(cfg, workFlowDir):
     minElev = selCfg.getint("minElev", fallback=0)
     maxElev = selCfg.getint("maxElev", fallback=4000)
     aspectSector = selCfg.get("aspectSector", fallback="all").strip().lower()
-    maskCommRegion = selCfg.getboolean("maskCommRegion", fallback=False)
+    applyRegionMask, regionMaskName = regionUtils.getMaskRegionSettings(cfg)
 
     # --- Read rasters ---
     praData, transform, demCrs = readRaster(praPath)
     demData, _, _ = readRaster(demPath)
     aspectData, _, _ = readRaster(aspectPath)
 
-    # --- Optional commission region mask ---
-    if maskCommRegion:
-        commRegionName = cfg["MAIN"].get("COMMISSIONREGION", "").strip()
-        if not commRegionName:
-            raise ValueError(
-                "...maskCommRegion=True but COMMISSIONREGION missing in [MAIN]."
-            )
-        commRegionPath = os.path.join(inputDir, commRegionName)
-        if not os.path.exists(commRegionPath):
+    # --- Optional project-region mask ---
+    if applyRegionMask:
+        regionMaskPath = os.path.join(inputDir, regionMaskName)
+        if not os.path.exists(regionMaskPath):
             raise FileNotFoundError(
-                f"Commission region file not found: {commRegionPath}"
+                f"Region mask file not found: {regionMaskPath}"
             )
 
-        commGdf = cast(gpd.GeoDataFrame, gpd.read_file(commRegionPath))
-        if getattr(commGdf, "crs", None) != demCrs:
-            commGdf = commGdf.to_crs(demCrs)
+        regionGdf = cast(gpd.GeoDataFrame, gpd.read_file(regionMaskPath))
+        if getattr(regionGdf, "crs", None) != demCrs:
+            regionGdf = regionGdf.to_crs(demCrs)
 
-        with dataUtils.timeIt("commission region mask"):
+        with dataUtils.timeIt("project region mask"):
             maskArr = rasterio.features.rasterize(
-                [(geom, 1) for geom in commGdf.geometry],
+                [(geom, 1) for geom in regionGdf.geometry],
                 out_shape=praData.shape,
                 transform=transform,
                 fill=0,
@@ -210,8 +206,8 @@ def runPraSelection(cfg, workFlowDir):
             )
             praData = np.where(maskArr == 1, praData, 0)
             log.info(
-                "...applied commission region mask (%s)",
-                os.path.basename(commRegionPath),
+                "...applied project region mask (%s)",
+                os.path.basename(regionMaskPath),
             )
 
     # --- Basic filters ---
@@ -236,13 +232,14 @@ def runPraSelection(cfg, workFlowDir):
     relPraDir = dataUtils.relPath(delineationDir, cairosDir)
 
     log.info(
-        "...PRA selection using: DEM=./%s, threshold=%.2f, elev=%dhm-%dhm, aspect=%s, maskCommRegion=%s",
+        "...PRA selection using: DEM=./%s, threshold=%.2f, "
+        "elev=%dhm-%dhm, aspect=%s, applyRegionMask=%s",
         relDemPath,
         praThreshold,
         minElev,
         maxElev,
         aspectSector,
-        maskCommRegion,
+        applyRegionMask,
     )
     log.info("...using pra/aspect from: ./%s", relPraDir)
 

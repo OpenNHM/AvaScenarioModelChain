@@ -615,7 +615,8 @@ def clipRastersByMasks(maskDir, outputsDir, outputDir, cairosDir, max_workers=4)
                         ]
                         if not geoms:
                             continue
-                        outName = f"praID{os.path.basename(mf).replace('.geojson','')}_{os.path.basename(rasterFile)}"
+                        maskName = os.path.splitext(os.path.basename(mf))[0]
+                        outName = f"{maskName}_{os.path.basename(rasterFile)}"
                         outPath = os.path.join(outputDir, outName)
                         if os.path.exists(outPath):
                             continue

@@ -256,21 +256,19 @@ def runPraMakeBigDataStructure(cfg, workFlowDir):
 
                         if fileStem.endswith("praAreaM") or "praAreaM" in fileStem:
                             dstPath = os.path.join(relAreaDir, os.path.basename(tifPath))
-                        else:
-                            dstPath = os.path.join(relAreaDir, os.path.basename(tifPath))
-
-                        try:
-                            shutil.copy2(tifPath, dstPath)
-                            nCopied += 1
-                            log.debug(
-                                "Copied: ./%s -> ./%s",
-                                dataUtils.relPath(tifPath, cairosDir),
-                                dataUtils.relPath(dstPath, cairosDir),
-                            )
-                        except Exception:
-                            log.exception(
-                                "Copy failed to ./%s", dataUtils.relPath(relAreaDir, cairosDir)
-                            )
+                            try:
+                                shutil.copy2(tifPath, dstPath)
+                                nCopied += 1
+                                log.debug(
+                                    "Copied: ./%s -> ./%s",
+                                    dataUtils.relPath(tifPath, cairosDir),
+                                    dataUtils.relPath(dstPath, cairosDir),
+                                )
+                            except Exception:
+                                log.exception(
+                                    "Copy failed to ./%s",
+                                    dataUtils.relPath(relAreaDir, cairosDir),
+                                )
 
         except Exception:
             log.exception("Case creation failed for ./%s", dataUtils.relPath(tifPath, cairosDir))

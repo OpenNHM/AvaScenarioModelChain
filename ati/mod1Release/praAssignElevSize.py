@@ -9,7 +9,7 @@
 # Inputs :
 #     - Segmented and size-filtered PRA GeoJSONs (from Step 05)
 #     - DEM raster (for elevation statistics)
-#     - Commission / region polygons (administrative overlays)
+#     - Commission polygons (administrative overlay)
 #
 # Outputs :
 #     - Enriched PRA GeoJSONs containing:
@@ -56,6 +56,7 @@ import rasterio
 from rasterio.mask import mask
 
 import ati.mod0Helper.dataUtils as dataUtils
+import ati.mod0Helper.regionUtils as regionUtils
 from ati.mod0Helper.cfgUtils import loadElevationBands, parseRangeCsv
 
 # ------------------ Logging setup ------------------ #
@@ -190,32 +191,6 @@ def assignSizeClass(row, sizeClasses):
     return None
 
 
-# ------------------ Overlay helpers ------------------ #
-
-def assignByLargestOverlapFast(praGdf, regionGdf, regionCols, demCrs):
-    """Assign region attributes by maximum overlap (spatial join + area test)."""
-    pra = praGdf.copy()
-    pra = pra.set_index(pra.index)
-    joined = gpd.sjoin(pra, regionGdf, how="left", predicate="intersects")
-    results = {col: [None] * len(pra) for col in regionCols}
-
-    for idx, group in joined.groupby(joined.index):
-        geom = pra.loc[idx].geometry
-        if geom is None or geom.is_empty:
-            continue
-        candidates = regionGdf.loc[group["index_right"].dropna().astype(int).unique()]
-        if len(candidates) == 0:
-            continue
-        candidates = candidates.assign(overlapArea=candidates.geometry.intersection(geom).area)
-        best = candidates.sort_values("overlapArea", ascending=False).iloc[0]
-        for col in regionCols:
-            results[col][idx] = best[col]
-
-    for col in regionCols:
-        pra[col] = results[col]
-    return pra
-
-
 # ------------------ Main driver ------------------ #
 
 def runPraAssignElevSize(cfg, workFlowDir):
@@ -243,12 +218,7 @@ def runPraAssignElevSize(cfg, workFlowDir):
     elevationBands = loadElevationBands(cfg)
     sizeClasses = loadSizeClasses(cfg)
 
-    # Commission and region polygons
-    commissionsPath = os.path.join(inputDir, cfg["MAIN"].get("COMMISSIONS", "").strip())
-    avaReportPath = os.path.join(inputDir, cfg["MAIN"].get("AVAREPORT", "").strip())
-
-    commissions = gpd.read_file(commissionsPath).to_crs(demCrs)
-    microRegions = gpd.read_file(avaReportPath).to_crs(demCrs)
+    adminRegions = regionUtils.loadAdminRegions(cfg, inputDir, demCrs)
 
     filteredFiles, longSuffix = findFilteredGeojsons(
         praSegmentationDir, streamThreshold, minLength, smoothingWindowSize, sizeFilter
@@ -294,13 +264,9 @@ def runPraAssignElevSize(cfg, workFlowDir):
                 # Size class
                 gdfBand["size_class"] = gdfBand.apply(lambda r: assignSizeClass(r, sizeClasses), axis=1)
 
-                # Region overlays
-                gdfBand = assignByLargestOverlapFast(
-                    gdfBand, commissions, ["LKGebietID", "LKGebiet", "LKRegion"], demCrs
-                )
-                gdfBand = assignByLargestOverlapFast(
-                    gdfBand, microRegions, ["LWDGebietID"], demCrs
-                )
+                # Static administrative overlay. Dynamic avalanche-warning
+                # regions are applied later by the scenario mapper.
+                gdfBand = regionUtils.assignAdminMetadata(gdfBand, adminRegions)
 
                 # Final rename/reorder
                 gdfFinal = renameAndReorderColumns(gdfBand)

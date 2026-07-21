@@ -185,11 +185,14 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
     os.makedirs(outputDir, exist_ok=True)
 
     if cfg["MAIN"].getboolean("customPaths"):
-        # --- DEM & FOREST from [MAIN] ---
-        demName = cfg["MAIN"]["DEM"]
-        forestName = cfg["MAIN"]["FOREST"]
+        # --- Required DEM and optional FOREST from [MAIN] ---
+        demName = cfg["MAIN"]["DEM"].strip()
+        forestName = cfg["MAIN"].get("FOREST", "").strip()
         demPath = os.path.join(inputDir, demName)
-        forestPath = os.path.join(inputDir, forestName)
+        forestPath = os.path.join(inputDir, forestName) if forestName else None
+        if forestPath is None:
+            cfg["praDELINEATION"]["forestType"] = "no_forest"
+            log.warning("No forest is provided: PRAs are computed without considering forest!")
     else:
         demPath = getInput.getDEMPath(avaDir)
         forestPath, _, _ = getInput.getAndCheckInputFiles(inputDir, "RES", "Forest", fileExt="raster")

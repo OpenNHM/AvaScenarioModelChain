@@ -583,7 +583,7 @@ def _dupSubsetColsScenarioIndependent(df: pd.DataFrame, modType: str) -> List[st
     """
     base = [
         "praID", "modType",
-        "LKGebiet", "LKGebietID", "LKRegion", "LWDGebietID",
+        "LKGebiet", "LKGebietID", "LKRegion",
         "praAreaM", "praAreaSized", "praAreaVol",
         "praElevBand", "praElevBandRule",
         "praElevMax", "praElevMean", "praElevMin",
