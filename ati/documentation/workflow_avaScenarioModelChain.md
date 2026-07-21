@@ -19,17 +19,6 @@ The main modules are:
 - **mapper**: postprocessing tools that help interpreting, mapping, representing simulation results
 - **workflows**: suggestions / ideas to combine the individual modules
 
-### Links to further doumentation:
-
-- [release module](ati/documentation/mod1_Release.md)
-- [mobility module](ati/documentation/mod2_Mobility.md)
-- [mapping module](ati/documentation/mod3_map.md)
-
-suggested workflows:
-
-- [auto ATES model chain](ati/documentation/workflow_autoAtesModelChain.md)
-- [Avalanche Scenario Model Chain](ati/documentation/workflow_avaScenarioModelChain.md)
-
 ### General run (Linux)
 
 #### Requirements
