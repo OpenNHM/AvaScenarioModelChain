@@ -7,7 +7,7 @@
 
 import pathlib
 import numpy as np
-import rasterio, rasterio.mask
+import rasterio, rasterio.mask, rasterio.fill
 from osgeo import gdal
 import os
 import csv
