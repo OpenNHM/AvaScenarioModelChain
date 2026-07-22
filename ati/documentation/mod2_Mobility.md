@@ -137,9 +137,9 @@ provided in the following structure:
 ```text
 <avaDir>/
 └── Inputs/
-    ├── DEM.tif or DEM.asc
+    ├── digital elevation model (*.tif or *.asc)
     └── RELArea/
-        └── releaseAreasM2.tif or *.asc
+        └── release areas in m² (.tif or *.asc)
 ```
 
 ## Output Files

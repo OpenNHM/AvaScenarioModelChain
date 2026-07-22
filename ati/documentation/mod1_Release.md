@@ -25,9 +25,9 @@ folder structure:
 ```text
 <avaDir>/
 └── Inputs/
-    ├── DEM.tif or DEM.asc
+    ├── digital elevation model (*.tif or *.asc)
     └── RES/
-        └── forest.tif or *.asc
+        └── forest density (.tif or *.asc)
 ```
 
 Configuration parameters can be adjusted in `(local_)praDelineationVeitingerCfg.ini`.
