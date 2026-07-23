@@ -6,7 +6,7 @@ import numpy as np
 import math
 import logging
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("avaframe.ati.sizeParameters")
 
 
 def praToVrel(ARel, dem, cfgSize):

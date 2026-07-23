@@ -15,7 +15,7 @@ import ati.mod0Helper.dataUtils as dataUtils
 import ati.mod2Mobility.sizeParameters as sP
 import ati.mod2Mobility.compParams as compParams
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("avaframe.ati.compParams")
 
 
 # ── helper for relative logging ──────────────────────────────────────────────

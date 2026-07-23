@@ -6,6 +6,7 @@ from avaframe import runCom4FlowPy as runFlowPy
 import avaframe.com4FlowPy.com4FlowPy as com4FlowPy
 import avaframe.in3Utils.cfgUtils as cfgUtils
 from avaframe.in3Utils import cfgHandling
+from avaframe.in3Utils import logUtils
 
 import ati
 import ati.mod0Helper.dataUtils as dataUtils
@@ -17,8 +18,6 @@ import ati.mod1Release.praPrepForFlowPy as praPrepForFlowPy
 import ati.mod2Mobility.compParams as compParams
 import ati.mod3Map.autoATESClassifier as autoATESClassifier
 import workflows.runAutoAtesModelChain as runAutoAtesModelChain
-
-log = logging.getLogger("workflows.runDynamicParameterisation")
 
 
 def autoAtesModelChainMain(avaDir=None, cfgAutoAtes=None):
@@ -44,6 +43,12 @@ def autoAtesModelChainMain(avaDir=None, cfgAutoAtes=None):
         avaDir = cfgMain["MAIN"]["avalancheDirectory"]
     else:
         cfgMain["MAIN"]["avalancheDirectory"] = avaDir
+
+    logName = "runAutoAtesModelChain"
+    # Start logging
+    log = logUtils.initiateLogger(avaDir, logName)
+    log.info("MAIN SCRIPT")
+    log.info("Current avalanche directory: %s", avaDir)
 
     avaDir = pathlib.Path(avaDir)
 

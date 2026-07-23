@@ -11,14 +11,17 @@ import rasterio, rasterio.mask
 from osgeo import gdal
 import os
 import csv
+import logging
 from skimage import morphology
 import scipy.ndimage
+
 from ati.mod3Map import autoATESClassifier
 import ati.mod0Helper.dataUtils as dataUtils
 
 import avaframe.in3Utils.cfgUtils as cfgUtils
 import avaframe.in1Data.getInput as getInput
 
+log = logging.getLogger("avaframe.ati.autoATESClassifier")
 
 def autoATESClassifierMain(cfg=None, avaDir=None, flowpyHash=None):
     if cfg is None:
