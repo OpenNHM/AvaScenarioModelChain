@@ -307,7 +307,10 @@ def filterAndWriteForFlowPy(
                     for sizeClass in sizeClassesToKeep:
                         # Safe filtering (string compare avoids dtype mismatch)
                         gBand = gBand.copy()
-                        if "praAreaSized" in gBand.columns:
+                        assignElevSize = cfg["praPREPFORFLOWPY"].getboolean("assignElevSize")
+                        if not assignElevSize:
+                            gSel = gBand.copy()
+                        elif "praAreaSized" in gBand.columns:
                             gSel = gBand[gBand["praAreaSized"].astype(str) == str(sizeClass)].copy()
                         else:
                             log.warning(

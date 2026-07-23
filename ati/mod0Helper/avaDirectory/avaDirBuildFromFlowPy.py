@@ -274,7 +274,19 @@ def runAvaDirBuildFromFlowPy(cfg, workFlowDir):
 
 # ------------------ Function: processScenario ------------------ #
 def _scenarioLocation(outputsDir):
-    """Return the result ID and Step 13 scenario directory, if discoverable."""
+    """Find the result ID and Step 13 scenario directory.
+
+    Parameters
+    ----------
+    outputsDir : str or pathlib.Path
+        FlowPy output directory containing the ``peakFiles`` folder.
+
+    Returns
+    -------
+    tuple
+        Result ID and scenario directory. Returns ``(None, None)`` when no
+        result folder can be found.
+    """
     resultFolders = sorted(glob.glob(os.path.join(outputsDir, "peakFiles", "res_*")))
     if not resultFolders:
         return None, None
@@ -291,7 +303,26 @@ def _scenarioOutputComplete(
     doSplit,
     doClipRasters,
 ):
-    """Return whether the selected Step 13 outputs already exist."""
+    """Check whether the selected Step 13 outputs already exist.
+
+    Parameters
+    ----------
+    outputsDir : str or pathlib.Path
+        FlowPy output directory to inspect.
+    writeSingleAvaGeoJSON : bool
+        Whether single-avalanche GeoJSON output is enabled.
+    writeScenarioParquet : bool
+        Whether scenario Parquet output is enabled.
+    doSplit : bool
+        Whether results are split into individual avalanche files.
+    doClipRasters : bool
+        Whether clipped result rasters are required.
+
+    Returns
+    -------
+    bool
+        True when every enabled Step 13 output exists, otherwise False.
+    """
     resId, targetDir = _scenarioLocation(outputsDir)
     if resId is None or targetDir is None or not os.path.isdir(targetDir):
         return False
@@ -759,7 +790,18 @@ def collectSingleAvaDirs(baseDir, avaDirData, avaDirLib, cairosDir):
 
 
 def _normalizeCollectedPraIdNames(com4Dir):
-    """Remove a duplicated legacy ``praID`` prefix from collected filenames."""
+    """Remove duplicated legacy ``praID`` prefixes from collected filenames.
+
+    Parameters
+    ----------
+    com4Dir : str or pathlib.Path
+        Collected com4FlowPy scenario directory to search recursively.
+
+    Returns
+    -------
+    None
+        Files are renamed in place.
+    """
     renamed = 0
     for source in Path(com4Dir).rglob("praIDpraID*"):
         target = source.with_name(source.name.replace("praIDpraID", "praID", 1))

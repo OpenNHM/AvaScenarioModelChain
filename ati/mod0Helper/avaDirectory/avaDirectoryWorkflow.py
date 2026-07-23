@@ -14,7 +14,24 @@ log = logging.getLogger(__name__)
 
 
 def _hasConfiguredOutput(directory, stem, cfg, prefix):
-    """Return whether at least one enabled output format exists."""
+    """Check whether at least one enabled output format exists.
+
+    Parameters
+    ----------
+    directory : pathlib.Path
+        Directory containing the workflow outputs.
+    stem : str
+        Common filename stem of the expected outputs.
+    cfg : configparser.SectionProxy
+        AvaDirectory configuration containing the output-format flags.
+    prefix : str
+        Configuration prefix used to form the output-format option names.
+
+    Returns
+    -------
+    bool
+        True when an enabled output file exists, otherwise False.
+    """
     formats = {
         "Csv": ".csv",
         "GeoJSON": ".geojson",

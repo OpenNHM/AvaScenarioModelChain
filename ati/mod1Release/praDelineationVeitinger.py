@@ -190,17 +190,20 @@ def runPraDelineation(cfg, workFlowDir=None, avaDir=None):
         forestName = cfg["MAIN"].get("FOREST", "").strip()
         demPath = os.path.join(inputDir, demName)
         forestPath = os.path.join(inputDir, forestName) if forestName else None
-        if forestPath is None:
-            cfg["praDELINEATION"]["forestType"] = "no_forest"
-            log.warning("No forest is provided: PRAs are computed without considering forest!")
     else:
         demPath = getInput.getDEMPath(avaDir)
         forestPath, _, _ = getInput.getAndCheckInputFiles(inputDir, "RES", "Forest", fileExt="raster")
         if forestPath is None:
             forestPath, _, _ = getInput.getAndCheckInputFiles(inputDir, "FOREST", "Forest", fileExt="raster")
-        if forestPath is None:
-            cfg["praDELINEATION"]["forestType"] = "no_forest"
-            log.warning("No forest is provided: PRAs are computed without considering forest!")
+
+    if forestPath is None:
+        configuredForestType = cfg["praDELINEATION"].get("forestType", fallback="pcc")
+        cfg["praDELINEATION"]["forestType"] = "no_forest"
+        log.warning(
+            "No forest is provided: [praDELINEATION] forestType=%s is changed to "
+            "forestType=no_forest; PRAs are computed without considering forest.",
+            configuredForestType,
+        )
 
     # --- Parameters from [praDELINEATION] ---
     praCfg = cfg["praDELINEATION"]
