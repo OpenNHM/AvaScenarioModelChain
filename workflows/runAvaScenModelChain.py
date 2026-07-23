@@ -18,7 +18,8 @@
 #
 # Inputs :
 #     - local_runAvaScenModelChainCfg.ini / runAvaScenModelChainCfg.ini
-#     - 00_input/ directory with DEM, FOREST, BOUNDARY
+#     - 00_input/ directory with a DEM and optional FOREST
+#     - Optional project boundary and regional datasets
 #
 # Outputs :
 #     - Structured scenario directories
@@ -156,9 +157,6 @@ def runAvaScenModelChainMain(workDir: str = "") -> bool:
     early_buf.flush()
     workflowUtils.closeEarlyBuffer(early_buf, root_logger)
     log.info("Step 00: Log file created at %s", os.path.relpath(log_path, start=log_dir))
-    config_path = atiCfgUtils.writeEffectiveConfigJson(cfg, log_dir, f"{run_basename}.json")
-    log.info("Step 00: Effective config saved at %s", os.path.relpath(config_path, start=log_dir))
-
     # --- Load full config ---
     if "WORKFLOW" not in cfg:
         log.error("Step 00: Missing [WORKFLOW] section in config.")
@@ -166,7 +164,10 @@ def runAvaScenModelChainMain(workDir: str = "") -> bool:
     workflowFlags = cfg["WORKFLOW"]
 
     # --- Validate inputs ---
-    if not workflowUtils.validateInputs(cfg, workFlowDir):
+    inputsValid = workflowUtils.validateInputs(cfg, workFlowDir)
+    config_path = atiCfgUtils.writeEffectiveConfigJson(cfg, log_dir, f"{run_basename}.json")
+    log.info("Step 00: Effective config saved at %s", os.path.relpath(config_path, start=log_dir))
+    if not inputsValid:
         return False
 
     # --- Master flags ---

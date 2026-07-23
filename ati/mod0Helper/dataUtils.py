@@ -307,7 +307,10 @@ def filterAndWriteForFlowPy(
                     for sizeClass in sizeClassesToKeep:
                         # Safe filtering (string compare avoids dtype mismatch)
                         gBand = gBand.copy()
-                        if "praAreaSized" in gBand.columns:
+                        assignElevSize = cfg["praPREPFORFLOWPY"].getboolean("assignElevSize")
+                        if not assignElevSize:
+                            gSel = gBand.copy()
+                        elif "praAreaSized" in gBand.columns:
                             gSel = gBand[gBand["praAreaSized"].astype(str) == str(sizeClass)].copy()
                         else:
                             log.warning(
@@ -319,7 +322,6 @@ def filterAndWriteForFlowPy(
                                 geometry=gBand.geometry.name,
                                 crs=gBand.crs,
                             )
-                        gSel = gBand.copy()
 
                         if len(gSel) == 0:
                             zeroFeatureFiles.setdefault(inPath, []).append(f"{bandLabel}-{sizeClass}")
@@ -351,7 +353,8 @@ def filterAndWriteForFlowPy(
 
                         baseName = os.path.basename(inPath)
                         name, ext = os.path.splitext(baseName)
-                        newName = f"{name}-{bandLabel}-{sizeClass}{ext}"
+                        finalName = name.removesuffix("-ElevBands-Sized")
+                        newName = f"{finalName}-{bandLabel}-{sizeClass}{ext}"
                         outPath = os.path.join(outDir, newName)
                         gSel.to_file(outPath, driver="GeoJSON")
 

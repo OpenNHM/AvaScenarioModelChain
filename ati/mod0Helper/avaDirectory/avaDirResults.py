@@ -47,7 +47,6 @@ import pandas as pd
 import geopandas as gpd
 
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import relPath
 
 log = logging.getLogger(__name__)
 logging.getLogger("pyogrio").setLevel(logging.WARNING)
@@ -74,22 +73,18 @@ def runAvaDirResults(cfg, workFlowDir):
     log.info("Step 15: Start AvaDirectory Results build...")
 
     avaCfg = cfg["avaDIRECTORY"]
-    main = cfg["MAIN"]
-
-    # --- Resolve core directories dynamically ---
-    rootDir = Path(main["workDir"]) / main["project"] / main["ID"]
 
     # Source: FlowPy output rasters (raw data)
-    avaDirData = rootDir / "11_avaDirectoryData"
+    avaDirData = Path(workFlowDir["avaDirDir"])
     # Destination: library of merged outputs
-    avaDirLib = rootDir / "12_avaDirectory"
+    avaDirLib = Path(workFlowDir["avaDirResultsDir"])
     # Ensure destination exists
     avaDirLib.mkdir(parents=True, exist_ok=True)
 
     cairosDir = Path(workFlowDir["cairosDir"])
-    log.info("Step 15: Using AvaDirectoryData = %s", relPath(avaDirData, cairosDir))
+    log.info("Step 15: Using AvaDirectoryData = %s", dataUtils.relPath(avaDirData, cairosDir))
     log.info(
-        "Step 15: Writing outputs to AvaDirectory = %s", relPath(avaDirLib, cairosDir)
+        "Step 15: Writing outputs to AvaDirectory = %s", dataUtils.relPath(avaDirLib, cairosDir)
     )
 
     # --- Check that input AvaDirectoryType exists ---
@@ -98,7 +93,7 @@ def runAvaDirResults(cfg, workFlowDir):
     if not avaTypeParquet.exists() and not avaTypeGeoJSON.exists():
         log.error(
             "Step 15: No avaDirectoryType.* found in %s",
-            relPath(avaDirLib, cairosDir),
+            dataUtils.relPath(avaDirLib, cairosDir),
         )
         return
 
@@ -125,7 +120,7 @@ def runAvaDirResults(cfg, workFlowDir):
 
     # --- Raster filename patterns ---
     typePatterns = {
-        "inputPRA": "-area_m.tif",
+        "inputPRA": ("-praAreaM.tif", "-area_m.tif"),
         "cellCounts": "_cellCounts_lzw.tif",
         "zDelta": "_zdelta_lzw.tif",
         "zDelta_sized": "_zdelta_sized_lzw.tif",
@@ -209,8 +204,10 @@ def _buildFileIndex(avaDirData: Path, typePatterns: dict) -> dict:
                 pra = int(praStr)
             except ValueError:
                 continue
-            for t, pat in typePatterns.items():
-                if pat in fname:
+            for t, patterns in typePatterns.items():
+                if isinstance(patterns, str):
+                    patterns = (patterns,)
+                if any(pattern in fname for pattern in patterns):
                     index.setdefault((pra, rid), {})[t] = str(tifPath.resolve())
                     break
     return index
@@ -222,16 +219,26 @@ def _loadOrBuildFileIndex(avaDirData, indexFile, typePatterns, forceRebuild, cai
         try:
             with open(indexFile, "rb") as f:
                 index = pickle.load(f)
-            log.info(
-                "Step 15: Loaded cached index (%d entries) from %s",
-                len(index),
-                relPath(indexFile, cairosDir),
+            indexedInputPra = any("inputPRA" in entry for entry in index.values())
+            inputPraPatterns = typePatterns["inputPRA"]
+            availableInputPra = any(
+                any(com4Dir.glob(f"*{pattern}"))
+                for com4Dir in Path(avaDirData).glob("com4_*")
+                for pattern in inputPraPatterns
             )
-            return index
+            if availableInputPra and not indexedInputPra:
+                log.info("Step 15: Cached index has no input PRA paths; rebuilding index.")
+            else:
+                log.info(
+                    "Step 15: Loaded cached index (%d entries) from %s",
+                    len(index),
+                    dataUtils.relPath(indexFile, cairosDir),
+                )
+                return index
         except Exception as e:
             log.warning("Step 15: Failed to load cached index (%s), rebuilding...", e)
 
-    log.info("Step 15: Building file index from %s", relPath(avaDirData, cairosDir))
+    log.info("Step 15: Building file index from %s", dataUtils.relPath(avaDirData, cairosDir))
     index = _buildFileIndex(avaDirData, typePatterns)
     with open(indexFile, "wb") as f:
         pickle.dump(index, f)
@@ -261,11 +268,21 @@ def _makeAvaDirResults(
     if outParquet.exists() and not forceRebuild and writeParquet:
         try:
             avaDir = gpd.read_parquet(outParquet)
-            log.info(
-                "Step 15: Loaded cached AvaDirectoryResults (%d features)",
-                len(avaDir),
+            indexedInputPra = any("inputPRA" in entry for entry in fileIndex.values())
+            cachedInputPra = (
+                "pathInputpra" in avaDir.columns
+                and avaDir["pathInputpra"].notna().any()
             )
-            return avaDir
+            if indexedInputPra and not cachedInputPra:
+                log.info(
+                    "Step 15: Cached results have no input PRA paths; rebuilding results."
+                )
+            else:
+                log.info(
+                    "Step 15: Loaded cached AvaDirectoryResults (%d features)",
+                    len(avaDir),
+                )
+                return avaDir
         except Exception as e:
             log.warning("Step 15: Failed to load cached Results (%s), rebuilding...", e)
 
@@ -332,7 +349,7 @@ def _makeAvaDirResults(
             avaDir.drop(columns="geometry", errors="ignore").to_csv(outCsv, index=False)
             log.info(
                 "Step 15: Wrote CSV AvaDirectoryResults to %s",
-                relPath(outCsv, cairosDir),
+                dataUtils.relPath(outCsv, cairosDir),
             )
         except Exception as e:
             log.warning("Step 15: CSV write warning: %s", e)
@@ -342,7 +359,7 @@ def _makeAvaDirResults(
             avaDir.to_file(outGeoJson, driver="GeoJSON")
             log.info(
                 "Step 15: Wrote GeoJSON AvaDirectoryResults to %s",
-                relPath(outGeoJson, cairosDir),
+                dataUtils.relPath(outGeoJson, cairosDir),
             )
         except Exception as e:
             log.warning("Step 15: GeoJSON write warning: %s", e)
@@ -352,7 +369,7 @@ def _makeAvaDirResults(
             avaDir.to_parquet(outParquet, index=False)
             log.info(
                 "Step 15: Wrote Parquet AvaDirectoryResults to %s",
-                relPath(outParquet, cairosDir),
+                dataUtils.relPath(outParquet, cairosDir),
             )
         except Exception as e:
             log.warning("Step 15: Parquet write warning: %s", e)
@@ -360,6 +377,6 @@ def _makeAvaDirResults(
     log.info(
         "Step 15: Wrote AvaDirectoryResults (%d features) to %s",
         len(avaDir),
-        relPath(avaDirLib, cairosDir),
+        dataUtils.relPath(avaDirLib, cairosDir),
     )
     return avaDir

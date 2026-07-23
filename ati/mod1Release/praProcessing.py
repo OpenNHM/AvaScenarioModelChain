@@ -58,7 +58,6 @@ import pathlib
 
 import ati
 import ati.mod0Helper.dataUtils as dataUtils
-from ati.mod0Helper.dataUtils import timeIt, relPath
 
 import avaframe.in1Data.getInput as getInput
 import avaframe.in3Utils.cfgUtils as cfgUtils
@@ -95,14 +94,14 @@ def runPraCleaning(cfg, cairosDir, outDir, demPath, selectedFiles):
 
     for inPath in selectedFiles:
         try:
-            relIn = relPath(inPath, cairosDir)
+            relIn = dataUtils.relPath(inPath, cairosDir)
             log.info("Cleaning PRA: ./%s", relIn)
             arr, _prof = dataUtils.readRaster(inPath, return_profile=True)
 
             mask = (arr > 0).astype(np.uint8)
 
             # Pass 1: direct neighbors
-            with timeIt("Pass1 - direct neighbors"):
+            with dataUtils.timeIt("Pass1 - direct neighbors"):
                 n1 = convolve(mask, edgeKernel1, mode="constant", cval=0)
                 mask1 = mask.copy()
                 mask1[n1 < p1_min] = 0
@@ -112,10 +111,10 @@ def runPraCleaning(cfg, cairosDir, outDir, demPath, selectedFiles):
             dataUtils.saveRaster(
                 demPath, out1, mask1, dtype="uint8", nodata=0, compress="DEFLATE"
             )
-            log.debug("Saved: ./%s", relPath(out1, cairosDir))
+            log.debug("Saved: ./%s", dataUtils.relPath(out1, cairosDir))
 
             # Pass 2: diagonal neighbors
-            with timeIt("Pass2 - diagonal neighbors"):
+            with dataUtils.timeIt("Pass2 - diagonal neighbors"):
                 n2 = convolve(mask1, edgeKernel2, mode="constant", cval=0)
                 mask2 = mask1.copy()
                 mask2[n2 < p2_min] = 0
@@ -124,14 +123,14 @@ def runPraCleaning(cfg, cairosDir, outDir, demPath, selectedFiles):
             dataUtils.saveRaster(
                 demPath, out2, mask2, dtype="uint8", nodata=0, compress="DEFLATE"
             )
-            log.debug("Saved: ./%s", relPath(out2, cairosDir))
+            log.debug("Saved: ./%s", dataUtils.relPath(out2, cairosDir))
 
             cleaned_final.append(out2)
             n_clean += 1
 
         except Exception:
             log.exception(
-                "Step 04: Cleaning failed for ./%s", relPath(inPath, cairosDir)
+                "Step 04: Cleaning failed for ./%s", dataUtils.relPath(inPath, cairosDir)
             )
             cleaned_final.append(inPath)
             n_fallback += 1
@@ -236,7 +235,7 @@ def runPraProcessing(cfg, workFlowDir=None, avaDir=None):
     pattern = f"*{code3}*.tif"
     selectedFiles = sorted(glob.glob(os.path.join(praSelectionDir, pattern)))
 
-    relDemPath = relPath(demPath, cairosDir)
+    relDemPath = dataUtils.relPath(demPath, cairosDir)
     log.info(
         "Step 04: Using DEM=./%s, cellSize=%.2f, CRS=%s, NoData=%s",
         relDemPath,
@@ -250,7 +249,7 @@ def runPraProcessing(cfg, workFlowDir=None, avaDir=None):
         log.error(
             "No PRA rasters found for threshold %s in ./%s",
             code3,
-            relPath(praSelectionDir, cairosDir),
+            dataUtils.relPath(praSelectionDir, cairosDir),
         )
         log.error("Step 04 failed (no matching rasters)")
         return
@@ -258,7 +257,7 @@ def runPraProcessing(cfg, workFlowDir=None, avaDir=None):
     # --- Metadata consistency check ---
     for f in selectedFiles:
         arr, prof = dataUtils.readRaster(f, return_profile=True)
-        relF = relPath(f, cairosDir)
+        relF = dataUtils.relPath(f, cairosDir)
         if prof["crs"] != demProfile["crs"]:
             log.warning("CRS mismatch for ./%s", relF)
         if prof["transform"] != demProfile["transform"]:
@@ -278,11 +277,11 @@ def runPraProcessing(cfg, workFlowDir=None, avaDir=None):
             )
 
     # --- Cleaning ---
-    with timeIt("Step 04: PRA Cleaning"):
+    with dataUtils.timeIt("Step 04: PRA Cleaning"):
         cleanedFiles = runPraCleaning(cfg, cairosDir, outDir, demPath, selectedFiles)
 
     # --- Polygonization to GeoJSON ---
-    with timeIt("Step 04: Polygonization"):
+    with dataUtils.timeIt("Step 04: Polygonization"):
         n_ok, n_fail = 0, 0
 
         for inPath in cleanedFiles:
@@ -293,11 +292,11 @@ def runPraProcessing(cfg, workFlowDir=None, avaDir=None):
                 gdf = rasterToPolygons(inPath, includeZero=False)
                 gdf = calcPolygonProperties(cast(gpd.GeoDataFrame, gdf))
                 gdf.to_file(geojsonPath, driver="GeoJSON")  # type: ignore[attr-defined]
-                log.info("Polygonized → ./%s", relPath(geojsonPath, cairosDir))
+                log.info("Polygonized → ./%s", dataUtils.relPath(geojsonPath, cairosDir))
                 n_ok += 1
             except Exception:
                 log.exception(
-                    "Polygonization failed for ./%s", relPath(inPath, cairosDir)
+                    "Polygonization failed for ./%s", dataUtils.relPath(inPath, cairosDir)
                 )
                 n_fail += 1
 

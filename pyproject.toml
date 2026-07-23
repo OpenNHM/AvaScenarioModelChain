@@ -48,7 +48,8 @@ rasterio = "*"
 # Task entrypoint
 # ----------------------------------------------------------------------
 [tool.pixi.tasks]
-modelchain = { cmd = "python runAvaScenModelChain.py", cwd = "." }
+avascen = { cmd = "python workflows/runAvaScenModelChain.py", cwd = "." }
+avadirectory = { cmd = "python workflows/runAvaDirectory.py", cwd = "." }
 
 [tool.pixi.feature.dev.dependencies]
 pytest = "*"
