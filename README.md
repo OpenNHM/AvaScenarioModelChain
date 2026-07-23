@@ -25,8 +25,8 @@ classify avalanche terrain.
 
 Suggestions for combining the individual modules into full processing chains:
 
-- [autoATES model chain](ati/documentation/workflow_autoAtesModelChain.md)
-- [Avalanche Scenario Model Chain](ati/documentation/workflow_avaScenarioModelChain.md)
+- [autoATES model chain](ati/documentation/workflowAutoAtesModelChain.md)
+- [Avalanche Scenario Model Chain](ati/documentation/workflowAvaScenarioModelChain.md)
 
 ---
 
