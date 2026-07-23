@@ -15,7 +15,9 @@ is assigned a continuous degree of membership, reflecting how likely it is to be
 
 The algorithm was developed by [Veitinger et al. (2016)](https://nhess.copernicus.org/articles/16/2211/2016/) and
 extended by [Sharp (2018)](https://doi.org/10.13140/RG.2.2.18673.94567.); the implementation here follows that approach
-with minor modifications. For details on the underlying method, refer to the two publications above.
+with minor modifications. The original code can be found in
+this [repository](https://github.com/jocha81/Avalanche-release). For details on the underlying method, refer to the two
+publications above.
 
 ### Input Files
 
