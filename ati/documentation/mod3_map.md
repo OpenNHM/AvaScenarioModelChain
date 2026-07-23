@@ -30,8 +30,9 @@ Compared to the publications mentioned above, we made the following changes (des
 ### Input Files
 
 The algorithm requires a digital elevation model, potential release areas (binary format), avalanche travel angle (in
-°), and, optionally, a forest layer and layer of interaction between avalanche and forest. If `customPaths` is `True`,
-the paths to the respective files are provided. If `customPaths` is `False`, the Inputs must follow this folder
+°), and, optionally, a forest density layer and a forest-interaction layer. If `customPaths` is `True`, the paths to the
+respective files are provided directly in the configuration file. If `customPaths` is `False`, the Inputs must follow
+this folder
 structure:
 
 ```text
@@ -39,23 +40,22 @@ structure:
 └── Inputs/
     ├── digital elevation model (*.tif or *.asc)
     ├── REL
-        └── binary PRAs (.tif or *.asc)
-    └── RES/
-        └── forest density (.tif or *.asc; optionally)
+    │   └── PRA raster (*.tif or *.asc)
+    └── RES/ or FOREST/
+        └── forest density raster (*.tif or *.asc; optional)
 └── Outputs/
     └── com4FlowPy/
         └── peakFiles/
             └── res_<flowpyHash>/
-                └── travel angle file, the name contains "fpTravelAngleMax" (*.tif or *.asc)
-                └── forest interaction file, the name contains "forestInteraction" (*.tif or *.asc; optionally)
-            
+                ├── travel-angle raster, filename contains "fpTravelAngleMax" (*.tif)
+                └── forest-interaction raster, filename contains "forestInteraction" (*.tif; optional)            
 ```
 
 Configuration parameters can be adjusted in `(local_)autoATESClassifierCfg.ini`.
 
 ### Output Files
 
-The resulting ATES layer, together with intermediate results, is written to the `Outputs` folder:
+The resulting ATES layer, together with intermediate results, is written to the `Outputs/autoATES` folder:
 
 ```text
 <avaDir>/
@@ -65,5 +65,6 @@ The resulting ATES layer, together with intermediate results, is written to the 
         └── ...
 ```
 
- 
 ---
+
+Go back to [main documentation](../../README.md).
