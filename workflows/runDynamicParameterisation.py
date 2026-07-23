@@ -3,6 +3,7 @@ import logging
 import shutil
 import avaframe.in3Utils.cfgUtils as cfgUtils
 from avaframe.in3Utils import cfgHandling
+from avaframe.in3Utils import logUtils
 
 import ati
 import ati.mod0Helper.dataUtils as dataUtils
@@ -13,8 +14,6 @@ import ati.mod1Release.praSubCatchments as praSubCatchments
 import ati.mod1Release.praSegmentation as praSegmentation
 import ati.mod1Release.praPrepForFlowPy as praPrepForFlowPy
 import ati.mod2Mobility.compParams as compParams
-
-log = logging.getLogger("ati.workflows.runDynamicParameterisation")
 
 
 def dynamicParameterisationMain(avaDir=None, cfgDynParamWorkflow=None):
@@ -38,6 +37,12 @@ def dynamicParameterisationMain(avaDir=None, cfgDynParamWorkflow=None):
         avaDir = cfgMain["MAIN"]["avalancheDirectory"]
     else:
         cfgMain["MAIN"]["avalancheDirectory"] = avaDir
+
+    logName = "runDynamicParameterisation"
+    # Start logging
+    log = logUtils.initiateLogger(avaDir, logName)
+    log.info("MAIN SCRIPT")
+    log.info("Current avalanche directory: %s", avaDir)
 
     avaDir = pathlib.Path(avaDir)
 
