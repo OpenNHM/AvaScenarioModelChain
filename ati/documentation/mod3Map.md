@@ -6,8 +6,8 @@ The `mod3Map` module provides tools to map and classify terrain.
 
 ## `autoATESClassifier`
 
-The `autoATESClassifier` classifies terrain into the four **Avalanche Terrain Exposure Scale (ATES)** classes —
-`simple`, `challenging`, `complex` and `extreme` — based on slope angle, potential release areas (PRA), avalanche runout
+The `autoATESClassifier` classifies terrain into the four **Avalanche Terrain Exposure Scale (ATES)** classes,
+`simple`, `challenging`, `complex` and `extreme`, based on slope angle, potential release areas (PRA), avalanche runout
 (Flow-Py travel angle) and, optionally, forest density and forest interaction.
 
 The autoATES v2.0 classifier was developed
@@ -15,17 +15,17 @@ by [Toft et al. (2023a)](https://doi.org/10.5194/nhess-2023-114); [Toft et al. (
 the implementation here follows that approach with minor modifications. For details on the underlying method, refer to
 the two publications above.
 
-### Adapted Workflow
+### Modified Workflow
 
 Compared to the publications mentioned above, we made the following changes (described in more detail in Hesselbach
-(2023), [Huber et al. (2023)](https://arc.lib.montana.edu/snow-science/objects/ISSW2023_P2.48.pdf) and Spannring
-(2024)):
+(2023)[^1], [Huber et al. (2023)](https://arc.lib.montana.edu/snow-science/objects/ISSW2023_P2.48.pdf) and Spannring
+(2024)[^2]):
 
 - No overhead hazard is considered.
-- **Forest interaction**: if a Flow-Py forest-interaction raster is available, it indicates how many forested cells an
-  avalanche path has passed through. Paths running through a moderate number of forested cells (`FORESTINT1`–
-  `FORESTINT2`) are downgraded by one ATES class; paths running through more forested cells than
-  `FORESTINT2` are downgraded to `simple` (class 1), except where already `extreme`.
+- Forest interaction: if a Flow-Py forest-interaction raster is available, it indicates how many forested cells an
+  avalanche path has passed through. The autoATES classifier reclassifies cells, which are assigned to forest
+  interaction value of `FORESTINT1` or higher, to a lower class. If a cell has a value higher than `FORESTINT2`, ATES
+  class 3 is reclassified to ATES class 1.
 
 ### Input Files
 
@@ -64,6 +64,14 @@ The resulting ATES layer, together with intermediate results, is written to the 
         ├── ates_gen.tif
         └── ...
 ```
+
+---
+
+[^1]: Hesselbach, C., 2023: Adaptation and Application of an Automated Avalanche Terrain Classification in Austria.
+Masters’ Thesis, Universität für Bodenkultur, Wien.
+
+[^2]: Spannring., P., 2024: Comparison of two avalanche terrain classification approaches:
+Avalanche Terrain Exposure Scale - Classified Avalanche Terrain. Masters’ Thesis, University of Innsbruck.
 
 ---
 

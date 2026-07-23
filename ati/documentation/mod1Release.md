@@ -2,7 +2,8 @@
 
 ## Overview
 
-The `mod1Release` module provides tools to derive **potential release areas (PRAs)** for avalanche simulations.
+The `mod1Release` module provides tools to derive **potential release areas (PRAs)**, e.g. as basis for avalanche
+simulations.
 
 ## `praDelineationVeitinger`
 
@@ -10,7 +11,7 @@ This algorithm delineates potential release areas based on slope, a wind-shelter
 derived from a digital elevation model (DEM). An optional forest mask can be supplied to exclude forested areas from the
 delineation.
 
-The method follows a **fuzzy-logic approach**: instead of a binary release/no-release classification, each raster cell
+The method follows a **fuzzy-logic approach**: each raster cell
 is assigned a continuous degree of membership, reflecting how likely it is to be a release area.
 
 The algorithm was developed by [Veitinger et al. (2016)](https://nhess.copernicus.org/articles/16/2211/2016/) and
