@@ -64,11 +64,12 @@ The workflow reads two configuration files:
 - **`runDynamicParameterisationCfg.ini`** (workflow settings): for each sub-module, an override section controls
   whether that module's own default configuration is used, or whether the parameter values defined in this
   workflow config file override it.
-| Override section                                  | Applies to                                                     |
-|-------------------------------------------------- |----------------------------------------------------------------|
-| `mod1Release_praDelineationVeitinger_override`    | `praDelineationVeitinger` (PRA delineation)                    |
-| `mod1Release_mod1Release_override`                | PRA processing, subcatchments, segmentation, rasterization     |
-| `mod2Mobility_compParams_override`                | `compParams` (mobility parameterization)                       |
+
+| Override section                               | Applies to                                                 |
+|------------------------------------------------|------------------------------------------------------------|
+| `mod1Release_praDelineationVeitinger_override` | `praDelineationVeitinger` (PRA delineation)                |
+| `mod1Release_mod1Release_override`             | PRA processing, subcatchments, segmentation, rasterization |
+| `mod2Mobility_compParams_override`             | `compParams` (mobility parameterization)                   |
  
 Each section has a `defaultConfig` flag: if `True`, the sub-module's own default configuration is used as the
 base configuration, with the parameter values given in `runDynamicParameterisationCfg.ini` applied on top as
