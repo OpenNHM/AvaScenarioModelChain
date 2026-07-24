@@ -1,4 +1,4 @@
-# AvaScenarioModelChain/plots/plotFunctions.py
+# AvaScenarioModelChain/mod01Plots/plotFunctions.py
 # Author: Paula Spannring (BFW)
 
 import numpy as np

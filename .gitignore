@@ -49,7 +49,6 @@ ati/**/**/Outputs
 
 # --- Documentation / assets ---
 *.pdf
-*.png
 *.zip
 
 # --- Large media (avoid committing videos) ---

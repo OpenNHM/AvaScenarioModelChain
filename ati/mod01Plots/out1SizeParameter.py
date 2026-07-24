@@ -1,11 +1,12 @@
-# AvaScenarioModelChain/plots/out1SizeParameter.py
+# AvaScenarioModelChain/mod01Plots/out1SizeParameter.py
 # Author: Paula Spannring (BFW)
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ati import in2Parameter as sizePar, in2Parameter as muxi
-import outPlots.plotFunctions as pF
+from ati.mod2Mobility import sizeParameters as sizePar
+from ati.mod2Mobility import muxi
+import ati.mod01Plots.plotFunctions as pF
 from ati.mod0Helper import dataUtils
 
 
@@ -163,18 +164,28 @@ def plotCrossCheck(cfgSize, ARel=5000, elevation=np.arange(100,3500,100)):
     umax = sizePar.sizeToUmax(size, elevation, cfgSize)
     exp = sizePar.sizeToExp(size, elevation, cfgSize)
 
+    if type(elevation) == float or type(elevation) == int:
+        plotVar = ARel
+        label = "release area [m²]"
+    else:
+        plotVar = elevation
+        label = "elevation [m]"
+
     fig, axs = plt.subplots(6,2, figsize = (15,10), tight_layout =True)
-    axs[0,0].set_title(f'Release area: {ARel} $m^2$, snowclimate: $\Delta$d = {deltaD*10000} cm / 100 m, $d_{{0m}}$ = {D0} m');
+    axs[0, 0].set_title(f"Parameterization settings")
 
-    axs[0,0].plot(elevation, dRelease)
-    axs[0,0].set_xlabel('elevation [m]')
-    axs[0,0].set_ylabel('snow height [m]')
+    if type(dRelease) == np.float64 or type(dRelease) == int or type(dRelease) == float:
+        axs[0, 0].plot(plotVar, size)
+        axs[0, 0].set_ylabel("avalanche size")
+    else:
+        axs[0, 0].plot(plotVar, dRelease)
+        axs[0, 0].set_ylabel("snow height [m]")
+    axs[0, 0].set_xlabel(label)
 
-    axs[1,0].plot(elevation, VRel)
-    axs[1,0].set_xlabel('elevation [m]')
+    axs[1, 0].plot(plotVar, VRel)
+    axs[1, 0].set_xlabel(label)
     axs[1,0].set_ylabel('Volume release [m³]');
 
-    
     axs[2,0].plot(VRel, size)
     axs[2,0].set_xlabel('release Volume [m³]')
     axs[2,0].set_ylabel('avalanche size')
@@ -191,16 +202,20 @@ def plotCrossCheck(cfgSize, ARel=5000, elevation=np.arange(100,3500,100)):
     axs[5,0].set_xlabel('release Volume [m³]')
     axs[5,0].set_ylabel('exponent');
 
-    axs[0,1].plot(size, dRelease)
-    axs[0,1].set_xlabel('avalanche size')
-    axs[0,1].set_ylabel('snow height m]')
+    if type(dRelease) == np.float64 or type(dRelease) == int or type(dRelease) == float:
+        axs[0, 1].plot(size, umax)
+        axs[0, 1].set_ylabel("u max [m/s]")
+    else:
+        axs[0, 1].plot(size, dRelease)
+        axs[0, 1].set_ylabel("snow height m]")
+    axs[0, 1].set_xlabel("avalanche size")
 
-    axs[1,1].plot(size, VRel)
+    axs[1, 1].plot(size, VRel)
     axs[1,1].set_xlabel('avalanche size')
     axs[1,1].set_ylabel('Volume release [m³]');
 
-    axs[2,1].plot(size, elevation)
-    axs[2,1].set_ylabel('elevation [m]')
+    axs[2, 1].plot(size, plotVar)
+    axs[2, 1].set_ylabel(label)
     axs[2,1].set_xlabel('avalanche size')
 
     axs[3,1].plot(size, alpha)
@@ -320,23 +335,23 @@ def plotSizeToPArameters(cfgSize, ARel=5000, elevation = np.arange(100,3500,100)
 
 
 def plotMuXi(cfgSize, cfgPlot, size=np.linspace(2,5,7), elevation = np.linspace(100,3500,7)):
-    '''
+    """
     calculate and plot the friction parameters mu and xi and the FlowPy input parameters
     uMaxLim and alpha dependent on the avalanche size
-    
+
     Parameters:
     -----------
     cfgSize: config Parser
         contains parameters for size parameterisation
     cfgPlot config Parser
-        contains parameters for plots
+        contains parameters for mod01Plots
     size: numpy array or float
         avalanche size of PRA cell
     elevation: numpy array
         elevation values of PRAs (default: 100-3500 m)
 
-    '''
-    
+    """
+
     alpha = sizePar.sizeToAlpha(size, elevation, cfgSize)
     umax = sizePar.sizeToUmax(size, elevation, cfgSize)
 
@@ -350,8 +365,7 @@ def plotMuXi(cfgSize, cfgPlot, size=np.linspace(2,5,7), elevation = np.linspace(
     ax1.set_xlabel('Avalanche size')
     plt.title(f"alpha(size=2) = {cfgSize['alphaSize2']}°, $\Delta$ alpha = {cfgSize['deltaAlpha']}°, \n uMax(size=2) = {cfgSize['uMaxSize2']} m/s, $\Delta$ uMax = {cfgSize['deltaUMax']} m/s")
 
-
-    #ax2.spines["right"].set_edgecolor('b')
+    # ax2.spines["right"].set_edgecolor('b')
     ax1.spines['left'].set_edgecolor('red')
     ax2.spines['top'].set_edgecolor('k')
     ax2.spines['bottom'].set_edgecolor('k')
@@ -374,7 +388,7 @@ def plotMuXi(cfgSize, cfgPlot, size=np.linspace(2,5,7), elevation = np.linspace(
     ax5.set_ylabel('xi in [m/$s^2$]')
     ax3.set_xlabel('Avalanche size')
 
-    #ax5.spines["right"].set_edgecolor('b')
+    # ax5.spines["right"].set_edgecolor('b')
     ax3.spines['left'].set_edgecolor('red')
     ax5.spines['top'].set_edgecolor('k')
     ax5.spines['bottom'].set_edgecolor('k')
