@@ -243,9 +243,9 @@ def sizeToExp(size, dem, cfgSize):
     sizeTemp = sizeForParameterisation(
         size, dem, cfgSize, cfgSize.getfloat("sizeShiftExp", fallback=0.0)
     )
-    uMaxSize2 = cfgSize.getfloat("uMaxSize2")
+    expCoeff = cfgSize.getfloat("expCoeff")
     expBase = cfgSize.getfloat("expBase")
-    exp = uMaxSize2 * (expBase) ** sizeTemp
+    exp = expCoeff * (expBase) ** sizeTemp
     return exp.astype(np.float32, copy=False)
 
 

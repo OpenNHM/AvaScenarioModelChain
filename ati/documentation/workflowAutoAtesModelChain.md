@@ -82,13 +82,13 @@ The workflow reads two configuration files:
   module's own default configuration is used, or whether the parameter values defined in this workflow config file
   override it:
 
-  | Override section                              | Applies to                                                               |
-                                              |--------------------------------------------------|--------------------------------------------------------------------------|
-  | `mod1Release_praDelineationVeitinger_override`    | `praDelineationVeitinger` (PRA delineation)                              |
-  | `mod1Release_mod1Release_override`                | `mod1Release` PRA processing, subcatchments, segmentation, rasterization |
-  | `mod2Mobility_compParams_override`                | `compParams` (mobility parameterization)                                 |
-  | `com4FlowPy_com4FlowPy_override`                  | `AvaFrame::com4FlowPy`                                                   |
-  | `mod3Map_autoATESClassifier_override`             | `autoATESClassifier`                                                     |
+| Override section                                | Applies to                                                                |
+|--------------------------------------------------|----------------------------------------------------------------------------|
+| `mod1Release_praDelineationVeitinger_override`    | `praDelineationVeitinger` (PRA delineation)                                |
+| `mod1Release_mod1Release_override`                | PRA processing, subcatchments, segmentation, rasterization                 |
+| `mod2Mobility_compParams_override`                | `compParams` (mobility parameterization)                                   |
+| `com4FlowPy_com4FlowPy_override`                  | `AvaFrame::com4FlowPy`                                                      |
+| `mod3Map_autoATESClassifier_override`             | `autoATESClassifier`                                                       |
 
   Each section has a `defaultConfig` flag: if `True`, the sub-module's own default configuration is used as the base
   configuration, with the parameter values given in `runAutoAtesModelChainCfg.ini` applied on top as overrides. If

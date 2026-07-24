@@ -27,6 +27,7 @@ Suggestions for combining the individual modules into full processing chains:
 
 - [autoATES model chain](ati/documentation/workflowAutoAtesModelChain.md)
 - [Avalanche Scenario Model Chain](ati/documentation/workflowAvaScenarioModelChain.md)
+- [plots](ati/documentation/plots.md)
 
 ---
 
